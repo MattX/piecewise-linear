@@ -1,0 +1,9 @@
+[package]
+name = "piecewise-linear"
+version = "0.1.0"
+authors = ["Matthieu Felix <matthieufelix@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+geo = "0.12.2"
+serde = { version = "1.0", optional = true, features = ["derive"] }
