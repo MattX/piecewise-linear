@@ -17,6 +17,7 @@ extern crate num_traits;
 
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
+use std::ops::Neg;
 
 use geo::{Coordinate, CoordinateType, Line, LineString, Point};
 use num_traits::Signed;
@@ -245,6 +246,14 @@ impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
                 .collect(),
         )
         .unwrap()
+    }
+}
+
+impl<T: CoordinateType + Signed> Neg for PiecewiseLinearFunction<T> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        self.negate()
     }
 }
 
