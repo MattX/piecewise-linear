@@ -22,7 +22,6 @@ extern crate serde;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::convert::{TryFrom, TryInto};
-use std::ops::Neg;
 
 use geo::{Coordinate, CoordinateType, Line, LineString, Point};
 use num_traits::Signed;
@@ -95,28 +94,16 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         SegmentsIterator(self.coordinates.iter().peekable())
     }
 
-    /// Returns an iterator over triples `(x, y1, y2)`, where `x` is the union of all points of
-    /// inflection of `self` and `other`, and `y1` and `y2` are the values of `self` and `other`,
-    /// respectively, at the corresponding `x`.
-    ///
-    /// ```
-    /// use std::convert::TryFrom;
-    /// use piecewise_linear::PiecewiseLinearFunction;
-    /// let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
-    /// let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1.5, 3.), (2., 10.)]).unwrap();
-    /// assert_eq!(
-    ///     f.points_of_inflection_iter(&g).unwrap().collect::<Vec<_>>(),
-    ///     vec![(0., vec![0., 0.]), (1., vec![1., 2.]), (1.5, vec![1.25, 3.]), (2., vec![1.5, 10.])]
-    /// );
-    /// ```
+    /// Returns an iterator over the joint points of inflection of `self` and `other`. See
+    /// `points_of_inflection_iter` in this module for details.
     pub fn points_of_inflection_iter<'a>(
         &'a self,
         other: &'a PiecewiseLinearFunction<T>,
-    ) -> Option<MultiPointsOfInflectionIterator<T>> {
+    ) -> Option<PointsOfInflectionIterator<T>> {
         if !self.has_same_domain_as(other) {
             None
         } else {
-            Some(MultiPointsOfInflectionIterator {
+            Some(PointsOfInflectionIterator {
                 segment_iterators: vec![
                     self.segments_iter().peekable(),
                     other.segments_iter().peekable(),
@@ -276,7 +263,7 @@ impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
     }
 }
 
-impl<T: CoordinateType + Signed> Neg for PiecewiseLinearFunction<T> {
+impl<T: CoordinateType + Signed> ::std::ops::Neg for PiecewiseLinearFunction<T> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -284,7 +271,7 @@ impl<T: CoordinateType + Signed> Neg for PiecewiseLinearFunction<T> {
     }
 }
 
-impl<T: CoordinateType + std::iter::Sum> PiecewiseLinearFunction<T> {
+impl<T: CoordinateType + ::std::iter::Sum> PiecewiseLinearFunction<T> {
     /// Returns the integral of the considered function over its entire domain.
     pub fn integrate(&self) -> T {
         self.segments_iter()
@@ -371,13 +358,15 @@ impl<T: CoordinateType> ::std::cmp::Ord for NextSegment<T> {
     }
 }
 
-pub struct MultiPointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
+/// Structure returned by `points_of_inflection_iter()` on `PiecewiseLinearFunction`. See that
+/// function's documentation for details.
+pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
     segment_iterators: Vec<::std::iter::Peekable<SegmentsIterator<'a, T>>>,
     heap: BinaryHeap<NextSegment<T>>,
     initial: bool,
 }
 
-impl<'a, T: CoordinateType + 'a> MultiPointsOfInflectionIterator<'a, T> {
+impl<'a, T: CoordinateType + 'a> PointsOfInflectionIterator<'a, T> {
     /// Helper method to avoid having rust complain about mutably accessing the segment iterators
     /// and heap at the same time.
     fn initialize(
@@ -401,7 +390,7 @@ impl<'a, T: CoordinateType + 'a> MultiPointsOfInflectionIterator<'a, T> {
     }
 }
 
-impl<'a, T: CoordinateType + 'a> Iterator for MultiPointsOfInflectionIterator<'a, T> {
+impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> {
     type Item = (T, Vec<T>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -456,6 +445,33 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
             .next()
             .and_then(|first| self.0.peek().map(|second| Line::new(*first, **second)))
     }
+}
+
+/// Returns an iterator over triples `(x, y1, y2)`, where `x` is the union of all points of
+/// inflection of `self` and `other`, and `y1` and `y2` are the values of `self` and `other`,
+/// respectively, at the corresponding `x`.
+///
+/// ```
+/// use std::convert::TryFrom;
+/// use piecewise_linear::{PiecewiseLinearFunction, points_of_inflection_iter};
+/// let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
+/// let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1.5, 3.), (2., 10.)]).unwrap();
+/// assert_eq!(
+///     points_of_inflection_iter(vec![f, g].as_slice()).unwrap().collect::<Vec<_>>(),
+///     vec![(0., vec![0., 0.]), (1., vec![1., 2.]), (1.5, vec![1.25, 3.]), (2., vec![1.5, 10.])]
+/// );
+/// ```
+pub fn points_of_inflection_iter<'a, T: CoordinateType + 'a>(
+    funcs: &'a [PiecewiseLinearFunction<T>],
+) -> Option<PointsOfInflectionIterator<'a, T>> {
+    if !funcs.windows(2).all(|w| w[0].has_same_domain_as(&w[1])) {
+        return None;
+    }
+    Some(PointsOfInflectionIterator {
+        segment_iterators: funcs.iter().map(|f| f.segments_iter().peekable()).collect(),
+        heap: BinaryHeap::new(),
+        initial: true,
+    })
 }
 
 /// Returns the restriction of segment `l` to the given domain, or `None` if the line's
@@ -578,9 +594,15 @@ mod tests {
     fn test_points_of_inflection_iter() {
         let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
         let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1.5, 3.), (2., 10.)]).unwrap();
-        for x in f.points_of_inflection_iter(&g).unwrap() {
-            println!("{:?}", x);
-        }
+        assert_eq!(
+            f.points_of_inflection_iter(&g).unwrap().collect::<Vec<_>>(),
+            vec![
+                (0., vec![0., 0.]),
+                (1., vec![1., 2.]),
+                (1.5, vec![1.25, 3.]),
+                (2., vec![1.5, 10.])
+            ]
+        );
     }
 
     #[test]

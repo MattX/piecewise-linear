@@ -13,6 +13,9 @@ matrix:
 
 before_deploy:
   - cargo doc --no-deps
+  - mkdir target/site-content/
+  - mv target/doc target/site-content/
+  - cp README.md target/site-content/index.md
 
 deploy:
   provider: pages
