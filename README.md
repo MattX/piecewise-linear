@@ -35,8 +35,9 @@ for more details.
 - Submit crate
 - Benchmarks
 - Home page in GH pages deployment
-- Add links in rustdoc? Unclear how that works
-- Split lib.rs
+- Add links in rustdoc?
+- Split lib.rs?
+- More tests
 
 ## Contributing
 

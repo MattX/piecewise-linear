@@ -232,7 +232,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     /// Sums this method with another piecewise linear function. Both functions must have the same
     /// domain.
     ///
-    /// Returns None
+    /// Returns None if the functions do not have the same domain.
     pub fn add(&self, other: &PiecewiseLinearFunction<T>) -> Option<PiecewiseLinearFunction<T>> {
         self.points_of_inflection_iter(other).map(|poi| {
             PiecewiseLinearFunction::new(
@@ -247,6 +247,16 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
             .unwrap()
         })
     }
+}
+
+/// Controls how the domain of a function is expanded using `expand_domain()` on
+/// `PiecewiseLinearFunction`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ExpandDomainStrategy {
+    /// Extend the segment at the edge of the function.
+    ExtendSegment,
+    /// Add a constant segment with the value of the edge point of the function.
+    ExtendValue,
 }
 
 impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
@@ -288,14 +298,7 @@ impl<T: CoordinateType + ::std::iter::Sum> PiecewiseLinearFunction<T> {
     }
 }
 
-/// Controls how the domain of a function is expanded.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ExpandDomainStrategy {
-    /// Extend the segment at the edge of the function.
-    ExtendSegment,
-    /// Add a constant segment with the value of the edge point of the function.
-    ExtendValue,
-}
+/**** Conversions ****/
 
 impl<T: CoordinateType> TryFrom<LineString<T>> for PiecewiseLinearFunction<T> {
     type Error = ();
@@ -337,6 +340,8 @@ impl<T: CoordinateType> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
             .collect()
     }
 }
+
+/**** Iterators ****/
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct NextSegment<T: CoordinateType> {
@@ -447,6 +452,8 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
     }
 }
 
+/**** General functions ****/
+
 /// Returns an iterator over triples `(x, y1, y2)`, where `x` is the union of all points of
 /// inflection of `self` and `other`, and `y1` and `y2` are the values of `self` and `other`,
 /// respectively, at the corresponding `x`.
@@ -461,6 +468,9 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
 ///     vec![(0., vec![0., 0.]), (1., vec![1., 2.]), (1.5, vec![1.25, 3.]), (2., vec![1.5, 10.])]
 /// );
 /// ```
+///
+/// The complexity of this method is _O(k log(k) n)_, where _k_ is the number of functions passed,
+/// and _n_ is the number of points in each function.
 pub fn points_of_inflection_iter<'a, T: CoordinateType + 'a>(
     funcs: &'a [PiecewiseLinearFunction<T>],
 ) -> Option<PointsOfInflectionIterator<'a, T>> {
@@ -474,9 +484,25 @@ pub fn points_of_inflection_iter<'a, T: CoordinateType + 'a>(
     })
 }
 
+/// Sums the functions together. Returns `None` in case of domain error.
+///
+/// This is faster than calling .add() repeatedly by a factor of _k / log(k)_.
+pub fn sum<'a, T: CoordinateType + ::std::iter::Sum>(
+    funcs: &[PiecewiseLinearFunction<T>],
+) -> Option<PiecewiseLinearFunction<T>> {
+    points_of_inflection_iter(funcs).map(|poi| {
+        poi.map(|(x, values)| Coordinate {
+            x,
+            y: values.iter().sum(),
+        })
+    })
+}
+
+/**** Helpers ****/
+
 /// Returns the restriction of segment `l` to the given domain, or `None` if the line's
 /// intersection with the domain is either a singleton or empty.
-pub fn line_in_domain<T: CoordinateType>(l: &Line<T>, domain: (T, T)) -> Option<Line<T>> {
+fn line_in_domain<T: CoordinateType>(l: &Line<T>, domain: (T, T)) -> Option<Line<T>> {
     if l.end.x <= domain.0 || l.start.x >= domain.1 {
         None
     } else {
