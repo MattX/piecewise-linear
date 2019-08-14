@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
 extern crate geo;
 
 use std::cmp::Ordering;
@@ -49,7 +48,7 @@ pub struct PiecewiseLinearFunction<T: CoordinateType> {
 }
 
 impl<T: CoordinateType> PiecewiseLinearFunction<T> {
-    /// Creates a new [`PiecewiseLinearFunction`] from a vector of [`Coordinate`]s.
+    /// Creates a new `PiecewiseLinearFunction` from a vector of `Coordinates`.
     ///
     /// Returns a new PicewiseLinearFunction, or `None` if the invariants were not respected.
     pub fn new(coordinates: Vec<Coordinate<T>>) -> Option<Self> {
@@ -60,7 +59,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
-    /// Returns a new constant [`PiecewiseLinearFunction`] with the specified domain and value, or
+    /// Returns a new constant `PiecewiseLinearFunction` with the specified domain and value, or
     /// `None` if the domain is not valid (i.e. `domain.1 <= domain.0`).
     pub fn constant(domain: (T, T), value: T) -> Option<Self> {
         if domain.0 < domain.1 {
@@ -177,7 +176,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     }
 
     /// Returns a new piecewise linear function that is the expansion of this function to the
-    /// specified domain. At most one value is added on either side. See [`ExpandDomainStrategy`]
+    /// specified domain. At most one value is added on either side. See `ExpandDomainStrategy`
     /// for options determining how these added values are picked.
     pub fn expand_domain(
         &self,
@@ -189,38 +188,47 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
         let mut new_points = Vec::new();
         if self.coordinates[0].x > to_domain.0 {
-            let left_point = match &strategy {
-                ExpandDomainStrategy::ExtendSegment => (
-                    to_domain.0,
-                    y_at_x(
+            match &strategy {
+                ExpandDomainStrategy::ExtendSegment => new_points.push(Coordinate {
+                    x: to_domain.0,
+                    y: y_at_x(
                         &Line::new(self.coordinates[0], self.coordinates[1]),
                         to_domain.0,
                     ),
-                )
-                    .into(),
-                ExpandDomainStrategy::ExtendValue => self.coordinates[0],
-            };
-            new_points.push(left_point);
+                }),
+                ExpandDomainStrategy::ExtendValue => {
+                    new_points.push((to_domain.0, self.coordinates[0].y).into());
+                    new_points.push(self.coordinates[0]);
+                }
+            }
+        } else {
+            new_points.push(self.coordinates[0]);
         }
-        new_points.extend_from_slice(&self.coordinates);
+
         let last_index = self.coordinates.len() - 1;
+        new_points.extend_from_slice(&self.coordinates[1..last_index]);
+
         if self.coordinates[last_index].x < to_domain.1 {
-            let right_point = match &strategy {
-                ExpandDomainStrategy::ExtendSegment => (
-                    to_domain.1,
-                    y_at_x(
+            match &strategy {
+                ExpandDomainStrategy::ExtendSegment => new_points.push(Coordinate {
+                    x: to_domain.1,
+                    y: y_at_x(
                         &Line::new(
                             self.coordinates[last_index - 1],
                             self.coordinates[last_index],
                         ),
                         to_domain.1,
                     ),
-                )
-                    .into(),
-                ExpandDomainStrategy::ExtendValue => self.coordinates[last_index],
-            };
-            new_points.push(right_point);
+                }),
+                ExpandDomainStrategy::ExtendValue => {
+                    new_points.push(self.coordinates[last_index]);
+                    new_points.push((to_domain.1, self.coordinates[last_index].y).into());
+                }
+            }
+        } else {
+            new_points.push(self.coordinates[last_index])
         }
+
         new_points.try_into().unwrap()
     }
 }
@@ -281,7 +289,7 @@ impl<T: CoordinateType> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     }
 }
 
-/// Structure returned by [PiecewiseLinearFunction::points_of_inflection_iter].
+/// Structure returned by `PiecewiseLinearFunction::points_of_inflection_iter()`.
 pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
     first: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
     second: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
@@ -337,7 +345,7 @@ impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> 
     }
 }
 
-/// Structure returned by [PiecewiseLinearFunction::segments_iter].
+/// Structure returned by `PiecewiseLinearFunction::segments_iter()`.
 pub struct SegmentsIterator<'a, T: CoordinateType + 'a>(
     ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
 );
@@ -378,10 +386,6 @@ fn y_at_x<T: CoordinateType>(line: &Line<T>, x: T) -> T {
     line.start.y + (x - line.start.x) * line.slope()
 }
 
-fn x_at_y<T: CoordinateType>(line: &Line<T>, y: T) -> T {
-    line.start.x + (y - line.start.y) / line.slope()
-}
-
 fn order_domains<T: CoordinateType>(d1: (T, T), d2: (T, T)) -> Option<Ordering> {
     if d1 == d2 {
         Some(Ordering::Equal)
@@ -418,12 +422,6 @@ mod tests {
     fn test_y_at_x() {
         assert_eq!(y_at_x(&Line::new((0., 0.), (1., 1.)), 0.25), 0.25);
         assert_eq!(y_at_x(&Line::new((1., 0.), (2., 1.)), 1.25), 0.25);
-    }
-
-    #[test]
-    fn test_x_at_y() {
-        assert_eq!(x_at_y(&Line::new((0., 0.), (1., 1.)), 0.25), 0.25);
-        assert_eq!(x_at_y(&Line::new((1., 0.), (2., 1.)), 0.25), 1.25);
     }
 
     #[test]
@@ -470,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_segments_iter() {
-        let f: PiecewiseLinearFunction<_> = vec![(0., 0.), (1., 1.), (2., 1.5)].try_into().unwrap();
+        let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
         assert_eq!(
             f.segments_iter().collect::<Vec<_>>(),
             vec![
@@ -482,9 +480,8 @@ mod tests {
 
     #[test]
     fn test_points_of_inflection_iter() {
-        let f: PiecewiseLinearFunction<_> = vec![(0., 0.), (1., 1.), (2., 1.5)].try_into().unwrap();
-        let g: PiecewiseLinearFunction<_> =
-            vec![(0., 0.), (1.5, 3.), (2., 10.)].try_into().unwrap();
+        let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
+        let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1.5, 3.), (2., 10.)]).unwrap();
         for x in f.points_of_inflection_iter(&g).unwrap() {
             println!("{:?}", x);
         }
@@ -554,5 +551,25 @@ mod tests {
             ])
             .unwrap()
         );
+    }
+
+    #[test]
+    fn test_expand_domain() {
+        let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
+
+        // Case 1: no expansion
+        assert_eq!(f.expand_domain((0., 2.), ExpandDomainStrategy::ExtendSegment), f);
+
+        // Case 2: left expansion
+        assert_eq!(f.expand_domain((-1., 2.), ExpandDomainStrategy::ExtendSegment),
+            vec![(-1., -1.), (1., 1.), (2., 1.5)].try_into().unwrap());
+        assert_eq!(f.expand_domain((-1., 2.), ExpandDomainStrategy::ExtendValue),
+            vec![(-1., 0.), (0., 0.), (1., 1.), (2., 1.5)].try_into().unwrap());
+
+        // Case 3: right expansion
+        assert_eq!(f.expand_domain((0., 4.), ExpandDomainStrategy::ExtendSegment),
+            vec![(0., 0.), (1., 1.), (4., 2.5)].try_into().unwrap());
+        assert_eq!(f.expand_domain((0., 4.), ExpandDomainStrategy::ExtendValue),
+            vec![(0., 0.), (1., 1.), (2., 1.5), (4., 1.5)].try_into().unwrap());
     }
 }
