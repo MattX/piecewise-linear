@@ -16,10 +16,9 @@
 extern crate geo;
 
 use std::cmp::Ordering;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use geo::{Coordinate, CoordinateType, Line, LineString, Point};
-use std::fmt::Debug;
 
 /// A continuous piecewise linear function.
 ///
@@ -36,8 +35,6 @@ use std::fmt::Debug;
 ///
 /// This representation means that functions defined on an empty or singleton set, as well as
 /// discontinuous functions, are not supported.
-///
-/// Example:
 ///
 /// ```
 /// use std::convert::TryFrom;
@@ -64,10 +61,10 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     }
 
     /// Returns a new constant [PiecewiseLinearFunction] with the specified domain and value, or
-    /// `None` if the domain is not valid (i.e. `domain_end <= domain_start`.
-    pub fn constant(domain_start: T, domain_end: T, value: T) -> Option<Self> {
-        if domain_start < domain_end {
-            let coordinates = vec![(domain_start, value).into(), (domain_end, value).into()];
+    /// `None` if the domain is not valid (i.e. `domain.1 <= domain.0`).
+    pub fn constant(domain: (T, T), value: T) -> Option<Self> {
+        if domain.0 < domain.1 {
+            let coordinates = vec![(domain.0, value).into(), (domain.1, value).into()];
             Some(PiecewiseLinearFunction { coordinates })
         } else {
             None
@@ -84,6 +81,8 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         self.domain() == other.domain()
     }
 
+    /// Returns an iterator over the segments of f. This iterator is guaranteed to have at least
+    /// one element.
     pub fn segments_iter(&self) -> SegmentsIterator<T> {
         SegmentsIterator(self.coordinates.iter().peekable())
     }
@@ -119,6 +118,8 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
+    /// Returns a segment ((x1, y1), (x2, y2)) of f such that x1 <= x <= x2, or `None` if `x` is
+    /// outside the domain of f.
     pub fn segment_at_x(&self, x: T) -> Option<Line<T>> {
         let idx = match self
             .coordinates
@@ -142,8 +143,34 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
+    /// Computes the value f(x) for this piecewise linear function. Returns `None` if `x` is
+    /// outside the domain of f.
     pub fn y_at_x(&self, x: T) -> Option<T> {
         self.segment_at_x(x).map(|line| y_at_x(&line, x))
+    }
+
+    /// Returns a new piecewise linear function that is the restriction of this function to the
+    /// specified domain.
+    ///
+    /// Returns `None` if `to_domain` is not a subset of the domain of `self`.
+    pub fn shrink_domain(&self, to_domain: (T, T)) -> Option<PiecewiseLinearFunction<T>> {
+        let order = order_domains(self.domain(), to_domain);
+        match order {
+            Some(Ordering::Equal) => Some(self.clone()),
+            Some(Ordering::Greater) => {
+                let mut new_points = Vec::new();
+                if self.coordinates[0].x >= to_domain.0 {
+                    new_points.push(self.coordinates[0]);
+                }
+                for segment in self.segments_iter() {
+                    if let Some(restricted) = line_in_domain(&segment, to_domain) {
+                        new_points.push(restricted.end);
+                    }
+                }
+                Some(new_points.try_into().unwrap())
+            }
+            _ => None,
+        }
     }
 }
 
@@ -194,7 +221,7 @@ impl<T: CoordinateType> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     }
 }
 
-// TODO rename
+/// Structure returned by [PiecewiseLinearFunction::points_of_inflection_iter].
 pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
     first: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
     second: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
@@ -250,8 +277,9 @@ impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> 
     }
 }
 
+/// Structure returned by [PiecewiseLinearFunction::segments_iter].
 pub struct SegmentsIterator<'a, T: CoordinateType + 'a>(
-    pub ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
+    ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
 );
 
 impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
@@ -266,12 +294,44 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
     }
 }
 
+/// Returns the restriction of segment `l` to the given domain, or `None` if the line's
+/// intersection with the domain is either a singleton or empty.
+pub fn line_in_domain<T: CoordinateType>(l: &Line<T>, domain: (T, T)) -> Option<Line<T>> {
+    if l.end.x <= domain.0 || l.start.x >= domain.1 {
+        None
+    } else {
+        let left_point = if l.start.x > domain.0 {
+            l.start
+        } else {
+            (domain.0, y_at_x(l, domain.0)).into()
+        };
+        let right_point = if l.end.x < domain.1 {
+            l.end
+        } else {
+            (domain.1, y_at_x(l, domain.1)).into()
+        };
+        Some(Line::new(left_point, right_point))
+    }
+}
+
 fn y_at_x<T: CoordinateType>(line: &Line<T>, x: T) -> T {
     line.start.y + (x - line.start.x) * line.slope()
 }
 
 fn x_at_y<T: CoordinateType>(line: &Line<T>, y: T) -> T {
     line.start.x + (y - line.start.y) / line.slope()
+}
+
+fn order_domains<T: CoordinateType>(d1: (T, T), d2: (T, T)) -> Option<Ordering> {
+    if d1 == d2 {
+        Some(Ordering::Equal)
+    } else if d1.0 <= d2.0 && d1.1 >= d2.1 {
+        Some(Ordering::Greater)
+    } else if d2.0 <= d1.0 && d2.1 >= d1.1 {
+        Some(Ordering::Less)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -294,10 +354,10 @@ mod tests {
 
     #[test]
     fn test_constant() {
-        assert_eq!(PiecewiseLinearFunction::constant(0.5, 0.5, 1.), None);
-        assert_eq!(PiecewiseLinearFunction::constant(0.5, -0.5, 1.), None);
+        assert_eq!(PiecewiseLinearFunction::constant((0.5, 0.5), 1.), None);
+        assert_eq!(PiecewiseLinearFunction::constant((0.5, -0.5), 1.), None);
         assert_eq!(
-            PiecewiseLinearFunction::constant(-25., -13., 1.).unwrap(),
+            PiecewiseLinearFunction::constant((-25., -13.), 1.).unwrap(),
             vec![(-25., 1.), (-13., 1.)].try_into().unwrap()
         );
     }
@@ -305,7 +365,7 @@ mod tests {
     #[test]
     fn test_domain() {
         assert_eq!(
-            PiecewiseLinearFunction::constant(-4., 5.25, 8.2)
+            PiecewiseLinearFunction::constant((-4., 5.25), 8.2)
                 .unwrap()
                 .domain(),
             (-4., 5.25)
@@ -368,5 +428,46 @@ mod tests {
         for x in f.points_of_inflection_iter(&g).unwrap() {
             println!("{:?}", x);
         }
+    }
+
+    #[test]
+    fn test_line_in_domain() {
+        // Case 1 - fully outside
+        assert_eq!(
+            line_in_domain(&Line::new((-1., 1.), (0., 2.)), (1., 2.)),
+            None
+        );
+        assert_eq!(
+            line_in_domain(&Line::new((-1., 1.), (0., 2.)), (-3., -2.)),
+            None
+        );
+        assert_eq!(
+            line_in_domain(&Line::new((-1., 1.), (0., 2.)), (0., 1.)),
+            None
+        );
+
+        // Case 2 - fully inside
+        assert_eq!(
+            line_in_domain(&Line::new((-1., 1.), (0., 2.)), (-2., 1.)),
+            Some(Line::new((-1., 1.), (0., 2.)))
+        );
+
+        // Case 3 - overlap to the right
+        assert_eq!(
+            line_in_domain(&Line::new((-1., 1.), (0., 2.)), (-0.5, 0.5)),
+            Some(Line::new((-0.5, 1.5), (0., 2.)))
+        );
+
+        // Case 4 - overlap to the left
+        assert_eq!(
+            line_in_domain(&Line::new((-1., 1.), (0., 2.)), (-1., -0.25)),
+            Some(Line::new((-1., 1.), (-0.25, 1.75)))
+        );
+
+        // Case 5 - overlap on both sides
+        assert_eq!(
+            line_in_domain(&Line::new((-1., 1.), (0., 2.)), (-0.75, -0.25)),
+            Some(Line::new((-0.75, 1.25), (-0.25, 1.75)))
+        );
     }
 }
