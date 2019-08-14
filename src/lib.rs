@@ -15,6 +15,10 @@
 extern crate geo;
 extern crate num_traits;
 
+#[cfg(feature = "serde")]
+#[macro_use]
+extern crate serde;
+
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Neg;
