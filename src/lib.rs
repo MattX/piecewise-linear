@@ -49,7 +49,7 @@ pub struct PiecewiseLinearFunction<T: CoordinateType> {
 }
 
 impl<T: CoordinateType> PiecewiseLinearFunction<T> {
-    /// Creates a new [PiecewiseLinearFunction] from a vector of [Coordinate]s.
+    /// Creates a new [`PiecewiseLinearFunction`] from a vector of [`Coordinate`]s.
     ///
     /// Returns a new PicewiseLinearFunction, or `None` if the invariants were not respected.
     pub fn new(coordinates: Vec<Coordinate<T>>) -> Option<Self> {
@@ -60,7 +60,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
-    /// Returns a new constant [PiecewiseLinearFunction] with the specified domain and value, or
+    /// Returns a new constant [`PiecewiseLinearFunction`] with the specified domain and value, or
     /// `None` if the domain is not valid (i.e. `domain.1 <= domain.0`).
     pub fn constant(domain: (T, T), value: T) -> Option<Self> {
         if domain.0 < domain.1 {
@@ -71,7 +71,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
-    /// Returns the minimum and maximum of a function's domain.
+    /// Returns a function's domain, represented as its min and max.
     pub fn domain(&self) -> (T, T) {
         (self.coordinates[0].x, self.coordinates.last().unwrap().x)
     }
@@ -118,8 +118,8 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
-    /// Returns a segment ((x1, y1), (x2, y2)) of f such that x1 <= x <= x2, or `None` if `x` is
-    /// outside the domain of f.
+    /// Returns a segment `((x1, y1), (x2, y2))` of this function such that `x1 <= x <= x2`, or
+    /// `None` if `x` is outside the domain of f.
     pub fn segment_at_x(&self, x: T) -> Option<Line<T>> {
         let idx = match self
             .coordinates
@@ -175,6 +175,63 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
             _ => None,
         }
     }
+
+    /// Returns a new piecewise linear function that is the expansion of this function to the
+    /// specified domain. At most one value is added on either side. See [`ExpandDomainStrategy`]
+    /// for options determining how these added values are picked.
+    pub fn expand_domain(
+        &self,
+        to_domain: (T, T),
+        strategy: ExpandDomainStrategy,
+    ) -> PiecewiseLinearFunction<T> {
+        if order_domains(self.domain(), to_domain) == Some(Ordering::Equal) {
+            return self.clone();
+        }
+        let mut new_points = Vec::new();
+        if self.coordinates[0].x > to_domain.0 {
+            let left_point = match &strategy {
+                ExpandDomainStrategy::ExtendSegment => (
+                    to_domain.0,
+                    y_at_x(
+                        &Line::new(self.coordinates[0], self.coordinates[1]),
+                        to_domain.0,
+                    ),
+                )
+                    .into(),
+                ExpandDomainStrategy::ExtendValue => self.coordinates[0],
+            };
+            new_points.push(left_point);
+        }
+        new_points.extend_from_slice(&self.coordinates);
+        let last_index = self.coordinates.len() - 1;
+        if self.coordinates[last_index].x < to_domain.1 {
+            let right_point = match &strategy {
+                ExpandDomainStrategy::ExtendSegment => (
+                    to_domain.1,
+                    y_at_x(
+                        &Line::new(
+                            self.coordinates[last_index - 1],
+                            self.coordinates[last_index],
+                        ),
+                        to_domain.1,
+                    ),
+                )
+                    .into(),
+                ExpandDomainStrategy::ExtendValue => self.coordinates[last_index],
+            };
+            new_points.push(right_point);
+        }
+        new_points.try_into().unwrap()
+    }
+}
+
+/// Controls how the domain of a function is expanded.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ExpandDomainStrategy {
+    /// Extend the segment at the edge of the function.
+    ExtendSegment,
+    /// Add a constant segment with the value of the edge point of the function.
+    ExtendValue,
 }
 
 impl<T: CoordinateType> TryFrom<LineString<T>> for PiecewiseLinearFunction<T> {
