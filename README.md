@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/MattX/piecewise-linear.svg?branch=master)](https://travis-ci.org/MattX/piecewise-linear)
+<!-- [![piecewise-linear on Crates.io](https://meritbadge.herokuapp.com/piecewise-linear)](https://crates.io/crates/piecewise-linear) -->
+
 # piecewise-linear
 
 ## Piecewise linear function manipulation utilities
