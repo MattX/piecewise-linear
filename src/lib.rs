@@ -164,6 +164,9 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
                 }
                 for segment in self.segments_iter() {
                     if let Some(restricted) = line_in_domain(&segment, to_domain) {
+                        if segment.start.x < to_domain.0 {
+                            new_points.push(restricted.start);
+                        }
                         new_points.push(restricted.end);
                     }
                 }
@@ -300,12 +303,12 @@ pub fn line_in_domain<T: CoordinateType>(l: &Line<T>, domain: (T, T)) -> Option<
     if l.end.x <= domain.0 || l.start.x >= domain.1 {
         None
     } else {
-        let left_point = if l.start.x > domain.0 {
+        let left_point = if l.start.x >= domain.0 {
             l.start
         } else {
             (domain.0, y_at_x(l, domain.0)).into()
         };
-        let right_point = if l.end.x < domain.1 {
+        let right_point = if l.end.x <= domain.1 {
             l.end
         } else {
             (domain.1, y_at_x(l, domain.1)).into()
@@ -339,6 +342,20 @@ mod tests {
     use std::convert::TryInto;
 
     use super::*;
+
+    fn get_test_function() -> PiecewiseLinearFunction<f64> {
+        PiecewiseLinearFunction::try_from(vec![
+            (-5.25, std::f64::MIN),
+            (-std::f64::consts::FRAC_PI_2, 0.1),
+            (-std::f64::consts::FRAC_PI_3, 0.1 + std::f64::EPSILON),
+            (0.1, 1.),
+            (1., 2.),
+            (2., 3.),
+            (3., 4.),
+            (std::f64::INFINITY, std::f64::NEG_INFINITY),
+        ])
+        .unwrap()
+    }
 
     #[test]
     fn test_y_at_x() {
@@ -392,20 +409,6 @@ mod tests {
             get_test_function().segment_at_x(1.).unwrap(),
             Line::new((0.1, 1.), (1., 2.))
         );
-    }
-
-    fn get_test_function() -> PiecewiseLinearFunction<f64> {
-        PiecewiseLinearFunction::try_from(vec![
-            (-5.25, std::f64::MIN),
-            (-std::f64::consts::FRAC_PI_2, 0.1),
-            (-std::f64::consts::FRAC_PI_3, 0.1 + std::f64::EPSILON),
-            (0.1, 1.),
-            (1., 2.),
-            (2., 3.),
-            (3., 4.),
-            (std::f64::INFINITY, std::f64::NEG_INFINITY),
-        ])
-        .unwrap()
     }
 
     #[test]
@@ -468,6 +471,31 @@ mod tests {
         assert_eq!(
             line_in_domain(&Line::new((-1., 1.), (0., 2.)), (-0.75, -0.25)),
             Some(Line::new((-0.75, 1.25), (-0.25, 1.75)))
+        );
+    }
+
+    #[test]
+    fn test_shrink_domain() {
+        let first_val = y_at_x(
+            &Line::new(
+                (-std::f64::consts::FRAC_PI_3, 0.1 + std::f64::EPSILON),
+                (0.1, 1.),
+            ),
+            0.,
+        );
+        assert_eq!(
+            get_test_function()
+                .shrink_domain((0.0, std::f64::INFINITY))
+                .unwrap(),
+            PiecewiseLinearFunction::try_from(vec![
+                (0., first_val),
+                (0.1, 1.),
+                (1., 2.),
+                (2., 3.),
+                (3., 4.),
+                (std::f64::INFINITY, std::f64::NEG_INFINITY),
+            ])
+            .unwrap()
         );
     }
 }
