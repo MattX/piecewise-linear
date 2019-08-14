@@ -20,6 +20,7 @@ extern crate num_traits;
 extern crate serde;
 
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Neg;
 
@@ -37,7 +38,8 @@ use num_traits::Signed;
 ///   * There are at least two coordinates in the `coordinates` array
 ///   * The coordinates are in strictly increasing order of `x` value.
 ///
-/// However, two consecutive segments do not necessarily have different slopes.
+/// However, two consecutive segments do not necessarily have different slopes. These methods
+/// will panic if invariants are broken by manually editing the `coordinates` vector.
 ///
 /// This representation means that functions defined on an empty or singleton set, as well as
 /// discontinuous functions, are not supported.
@@ -238,6 +240,22 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
 
         new_points.try_into().unwrap()
     }
+
+    /// Sums this method with another piecewise linear function. Both functions must have the same
+    /// domain.
+    ///
+    /// Returns None
+    pub fn add(&self, other: &PiecewiseLinearFunction<T>) -> Option<PiecewiseLinearFunction<T>> {
+        self.points_of_inflection_iter(other).map(|poi| {
+            PiecewiseLinearFunction::new(
+                poi.map(|(x, y1, y2)| Coordinate { x, y: y1 + y2 })
+                    .collect(),
+            )
+            // This unwrap is guaranteed to succeed as the starting POI has generates ordered x,
+            // which do not get modified.
+            .unwrap()
+        })
+    }
 }
 
 impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
@@ -249,6 +267,7 @@ impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
                 .map(|Coordinate { x, y }| Coordinate { x: *x, y: -(*y) })
                 .collect(),
         )
+        // This unwrap is guaranteed to succeed because the coordinate's x values haven't changed.
         .unwrap()
     }
 }
@@ -315,13 +334,7 @@ impl<T: CoordinateType> TryFrom<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     type Error = ();
 
     fn try_from(value: Vec<(T, T)>) -> Result<Self, Self::Error> {
-        PiecewiseLinearFunction::new(
-            value
-                .into_iter()
-                .map(|tuple| Coordinate::from(tuple))
-                .collect(),
-        )
-        .ok_or(())
+        PiecewiseLinearFunction::new(value.into_iter().map(Coordinate::from).collect()).ok_or(())
     }
 }
 
@@ -334,7 +347,7 @@ impl<T: CoordinateType> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     }
 }
 
-/// Structure returned by `PiecewiseLinearFunction::points_of_inflection_iter()`.
+/// Structure returned by `points_of_inflection_iter()` on a `PiecewiseLinearFunction`.
 pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
     first: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
     second: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
@@ -390,7 +403,94 @@ impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> 
     }
 }
 
-/// Structure returned by `PiecewiseLinearFunction::segments_iter()`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct NextSegment<T: CoordinateType> {
+    x: T,
+    index: usize,
+}
+
+impl<T: CoordinateType> ::std::cmp::Eq for NextSegment<T> {}
+
+impl<T: CoordinateType> ::std::cmp::PartialOrd for NextSegment<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.x.partial_cmp(&other.x).map(|r| r.reverse())
+    }
+}
+
+impl<T: CoordinateType> ::std::cmp::Ord for NextSegment<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    }
+}
+
+pub struct MultiPointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
+    segment_iterators: Vec<::std::iter::Peekable<SegmentsIterator<'a, T>>>,
+    heap: BinaryHeap<NextSegment<T>>,
+    initial: bool,
+}
+
+impl<'a, T: CoordinateType + 'a> MultiPointsOfInflectionIterator<'a, T> {
+    /// Helper method to avoid having rust complain about mutably accessing the segment iterators
+    /// and heap at the same time.
+    fn initialize(
+        segment_iterators: &mut Vec<::std::iter::Peekable<SegmentsIterator<'a, T>>>,
+        heap: &mut BinaryHeap<NextSegment<T>>,
+    ) -> (T, Vec<T>) {
+        let values = segment_iterators
+            .iter_mut()
+            .enumerate()
+            .map(|(index, it)| {
+                let seg = it.peek().unwrap();
+                heap.push(NextSegment {
+                    x: seg.end.x,
+                    index,
+                });
+                seg.start.y
+            })
+            .collect();
+        let x = segment_iterators[0].peek().unwrap().start.x;
+        (x, values)
+    }
+}
+
+impl<'a, T: CoordinateType + 'a> Iterator for MultiPointsOfInflectionIterator<'a, T> {
+    type Item = (T, Vec<T>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.initial {
+            self.initial = false;
+            Some(Self::initialize(
+                &mut self.segment_iterators,
+                &mut self.heap,
+            ))
+        } else {
+            self.heap.pop().map(|next_segment| {
+                let x = next_segment.x;
+                let values = self
+                    .segment_iterators
+                    .iter_mut()
+                    .map(|segment_iterator| y_at_x(segment_iterator.peek().unwrap(), x))
+                    .collect();
+
+                while let Some(segt) = self.heap.peek() {
+                    if segt.x != x {
+                        break;
+                    }
+                    self.heap.pop();
+                }
+                let segment = self.segment_iterators[next_segment.index].peek().unwrap();
+                self.heap.push(NextSegment {
+                    x: segment.end.x,
+                    index: next_segment.index,
+                });
+
+                (x, values)
+            })
+        }
+    }
+}
+
+/// Structure returned by `segments_iter()` on a `PiecewiseLinearFunction`.
 pub struct SegmentsIterator<'a, T: CoordinateType + 'a>(
     ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
 );
@@ -399,11 +499,9 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
     type Item = Line<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().and_then(|first| {
-            self.0
-                .peek()
-                .map(|second| Line::new(first.clone(), *second.clone()))
-        })
+        self.0
+            .next()
+            .and_then(|first| self.0.peek().map(|second| Line::new(*first, **second)))
     }
 }
 

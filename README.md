@@ -17,12 +17,26 @@ and types.
 - [x] Efficient iterator over inflection points of two functions
 - [x] Shrink and expand function domain 
 - [x] Negation
-- [ ] Sum
-- [ ] Product
 - [x] Numerical integration
+- [ ] Sum
+- [ ] Min / max
+- [ ] Product
+- [ ] Abs value
 
 Most numeric types should be supported, but only `f64` has been
-seriously tested. 
+seriously tested.
+
+See [the documentation](https://mattx.github.io/piecewise-linear/piecewise_linear/)
+for more details.
+
+### Other todo
+
+- Improve CI with clippy and fmt
+- Submit crate
+- Benchmarks
+- Home page in GH pages deployment
+- Add links in rustdoc? Unclear how that works
+- Split lib.rs
 
 ## Contributing
 
