@@ -11,11 +11,15 @@ and types.
 
 ### Features
 
-- [x] Efficient iterator over inflection points of a two functions
+- [x] Efficient iterator over inflection points of two functions
 - [x] Shrink and expand function domain 
-- [ ] Negation
+- [x] Negation
 - [ ] Sum
-- [ ] Numerical integration
+- [ ] Product
+- [x] Numerical integration
+
+Most numeric types should be supported, but only `f64` has been
+seriously tested. 
 
 ## Contributing
 

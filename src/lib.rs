@@ -13,11 +13,13 @@
 // limitations under the License.
 
 extern crate geo;
+extern crate num_traits;
 
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
 
 use geo::{Coordinate, CoordinateType, Line, LineString, Point};
+use num_traits::Signed;
 
 /// A continuous piecewise linear function.
 ///
@@ -230,6 +232,36 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
 
         new_points.try_into().unwrap()
+    }
+}
+
+impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
+    /// Returns -f.
+    pub fn negate(&self) -> PiecewiseLinearFunction<T> {
+        PiecewiseLinearFunction::new(
+            self.coordinates
+                .iter()
+                .map(|Coordinate { x, y }| Coordinate { x: *x, y: -(*y) })
+                .collect(),
+        )
+        .unwrap()
+    }
+}
+
+impl<T: CoordinateType + std::iter::Sum> PiecewiseLinearFunction<T> {
+    /// Returns the integral of the considered function over its entire domain.
+    pub fn integrate(&self) -> T {
+        self.segments_iter()
+            .map(|segment| {
+                let (min_y, max_y) = if segment.start.y < segment.end.y {
+                    (segment.start.y, segment.end.y)
+                } else {
+                    (segment.end.y, segment.start.y)
+                };
+                let x_span = segment.end.x - segment.start.x;
+                x_span * (min_y + max_y / T::from(2).unwrap())
+            })
+            .sum()
     }
 }
 
@@ -558,18 +590,42 @@ mod tests {
         let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
 
         // Case 1: no expansion
-        assert_eq!(f.expand_domain((0., 2.), ExpandDomainStrategy::ExtendSegment), f);
+        assert_eq!(
+            f.expand_domain((0., 2.), ExpandDomainStrategy::ExtendSegment),
+            f
+        );
 
         // Case 2: left expansion
-        assert_eq!(f.expand_domain((-1., 2.), ExpandDomainStrategy::ExtendSegment),
-            vec![(-1., -1.), (1., 1.), (2., 1.5)].try_into().unwrap());
-        assert_eq!(f.expand_domain((-1., 2.), ExpandDomainStrategy::ExtendValue),
-            vec![(-1., 0.), (0., 0.), (1., 1.), (2., 1.5)].try_into().unwrap());
+        assert_eq!(
+            f.expand_domain((-1., 2.), ExpandDomainStrategy::ExtendSegment),
+            vec![(-1., -1.), (1., 1.), (2., 1.5)].try_into().unwrap()
+        );
+        assert_eq!(
+            f.expand_domain((-1., 2.), ExpandDomainStrategy::ExtendValue),
+            vec![(-1., 0.), (0., 0.), (1., 1.), (2., 1.5)]
+                .try_into()
+                .unwrap()
+        );
 
         // Case 3: right expansion
-        assert_eq!(f.expand_domain((0., 4.), ExpandDomainStrategy::ExtendSegment),
-            vec![(0., 0.), (1., 1.), (4., 2.5)].try_into().unwrap());
-        assert_eq!(f.expand_domain((0., 4.), ExpandDomainStrategy::ExtendValue),
-            vec![(0., 0.), (1., 1.), (2., 1.5), (4., 1.5)].try_into().unwrap());
+        assert_eq!(
+            f.expand_domain((0., 4.), ExpandDomainStrategy::ExtendSegment),
+            vec![(0., 0.), (1., 1.), (4., 2.5)].try_into().unwrap()
+        );
+        assert_eq!(
+            f.expand_domain((0., 4.), ExpandDomainStrategy::ExtendValue),
+            vec![(0., 0.), (1., 1.), (2., 1.5), (4., 1.5)]
+                .try_into()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_negative() {
+        let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
+        assert_eq!(
+            f.negate(),
+            vec![(0., -0.), (1., -1.), (2., -1.5)].try_into().unwrap()
+        )
     }
 }
