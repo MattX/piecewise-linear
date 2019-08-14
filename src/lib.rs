@@ -106,21 +106,22 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     /// let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1.5, 3.), (2., 10.)]).unwrap();
     /// assert_eq!(
     ///     f.points_of_inflection_iter(&g).unwrap().collect::<Vec<_>>(),
-    ///     vec![(0., 0., 0.), (1., 1., 2.), (1.5, 1.25, 3.), (2., 1.5, 10.)]
+    ///     vec![(0., vec![0., 0.]), (1., vec![1., 2.]), (1.5, vec![1.25, 3.]), (2., vec![1.5, 10.])]
     /// );
     /// ```
     pub fn points_of_inflection_iter<'a>(
         &'a self,
         other: &'a PiecewiseLinearFunction<T>,
-    ) -> Option<PointsOfInflectionIterator<T>> {
+    ) -> Option<MultiPointsOfInflectionIterator<T>> {
         if !self.has_same_domain_as(other) {
             None
         } else {
-            Some(PointsOfInflectionIterator {
-                first: self.coordinates.iter().peekable(),
-                second: other.coordinates.iter().peekable(),
-                first_segment_iterator: self.segments_iter().peekable(),
-                second_segment_iterator: other.segments_iter().peekable(),
+            Some(MultiPointsOfInflectionIterator {
+                segment_iterators: vec![
+                    self.segments_iter().peekable(),
+                    other.segments_iter().peekable(),
+                ],
+                heap: BinaryHeap::new(),
                 initial: true,
             })
         }
@@ -248,8 +249,11 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     pub fn add(&self, other: &PiecewiseLinearFunction<T>) -> Option<PiecewiseLinearFunction<T>> {
         self.points_of_inflection_iter(other).map(|poi| {
             PiecewiseLinearFunction::new(
-                poi.map(|(x, y1, y2)| Coordinate { x, y: y1 + y2 })
-                    .collect(),
+                poi.map(|(x, coords)| Coordinate {
+                    x,
+                    y: coords[0] + coords[1],
+                })
+                .collect(),
             )
             // This unwrap is guaranteed to succeed as the starting POI has generates ordered x,
             // which do not get modified.
@@ -347,62 +351,6 @@ impl<T: CoordinateType> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     }
 }
 
-/// Structure returned by `points_of_inflection_iter()` on a `PiecewiseLinearFunction`.
-pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
-    first: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
-    second: ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
-    first_segment_iterator: ::std::iter::Peekable<SegmentsIterator<'a, T>>,
-    second_segment_iterator: ::std::iter::Peekable<SegmentsIterator<'a, T>>,
-    initial: bool,
-}
-
-impl<'a, T: CoordinateType + 'a> PointsOfInflectionIterator<'a, T> {
-    fn advance_segment_iterators(&mut self, first: bool, second: bool) {
-        debug_assert!(!self.initial || (first && second));
-        if !self.initial {
-            if first {
-                self.first_segment_iterator.next();
-            }
-            if second {
-                self.second_segment_iterator.next();
-            }
-        }
-        self.initial = false;
-    }
-}
-
-impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> {
-    type Item = (T, T, T);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match (self.first.peek(), self.second.peek()) {
-            (Some(first), Some(second)) => {
-                if first.x == second.x {
-                    let first = self.first.next().unwrap();
-                    let second = self.second.next().unwrap();
-                    self.advance_segment_iterators(true, true);
-                    Some((first.x, first.y, second.y))
-                } else if first.x < second.x {
-                    let first = self.first.next().unwrap();
-                    let y2 = y_at_x(self.second_segment_iterator.peek().unwrap(), first.x);
-                    self.advance_segment_iterators(true, false);
-                    Some((first.x, first.y, y2))
-                } else {
-                    let second = self.second.next().unwrap();
-                    let y1 = y_at_x(self.first_segment_iterator.peek().unwrap(), second.x);
-                    self.advance_segment_iterators(false, true);
-                    Some((second.x, y1, second.y))
-                }
-            }
-            (None, None) => None,
-            (Some(_), None) | (None, Some(_)) => panic!(
-                "domain constraints should guarantee that both segment iterators get exhausted at \
-                 the same time"
-            ),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct NextSegment<T: CoordinateType> {
     x: T,
@@ -464,7 +412,7 @@ impl<'a, T: CoordinateType + 'a> Iterator for MultiPointsOfInflectionIterator<'a
                 &mut self.heap,
             ))
         } else {
-            self.heap.pop().map(|next_segment| {
+            self.heap.peek().cloned().map(|next_segment| {
                 let x = next_segment.x;
                 let values = self
                     .segment_iterators
@@ -472,17 +420,22 @@ impl<'a, T: CoordinateType + 'a> Iterator for MultiPointsOfInflectionIterator<'a
                     .map(|segment_iterator| y_at_x(segment_iterator.peek().unwrap(), x))
                     .collect();
 
-                while let Some(segt) = self.heap.peek() {
+                while let Some(segt) = self.heap.peek().cloned() {
                     if segt.x != x {
                         break;
                     }
                     self.heap.pop();
+                    self.segment_iterators[segt.index].next();
+                    self.segment_iterators[segt.index]
+                        .peek()
+                        .cloned()
+                        .map(|segment| {
+                            self.heap.push(NextSegment {
+                                x: segment.end.x,
+                                index: segt.index,
+                            })
+                        });
                 }
-                let segment = self.segment_iterators[next_segment.index].peek().unwrap();
-                self.heap.push(NextSegment {
-                    x: segment.end.x,
-                    index: next_segment.index,
-                });
 
                 (x, values)
             })
