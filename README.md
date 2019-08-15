@@ -18,7 +18,7 @@ and types.
 - [x] Shrink and expand function domain 
 - [x] Negation
 - [x] Numerical integration
-- [ ] Sum
+- [x] Sum
 - [ ] Min / max
 - [ ] Product
 - [ ] Abs value

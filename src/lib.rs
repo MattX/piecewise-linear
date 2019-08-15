@@ -420,15 +420,12 @@ impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> 
                     }
                     self.heap.pop();
                     self.segment_iterators[segt.index].next();
-                    self.segment_iterators[segt.index]
-                        .peek()
-                        .cloned()
-                        .map(|segment| {
-                            self.heap.push(NextSegment {
-                                x: segment.end.x,
-                                index: segt.index,
-                            })
-                        });
+                    if let Some(segment) = self.segment_iterators[segt.index].peek().cloned() {
+                        self.heap.push(NextSegment {
+                            x: segment.end.x,
+                            index: segt.index,
+                        })
+                    }
                 }
 
                 (x, values)
@@ -487,14 +484,19 @@ pub fn points_of_inflection_iter<'a, T: CoordinateType + 'a>(
 /// Sums the functions together. Returns `None` in case of domain error.
 ///
 /// This is faster than calling .add() repeatedly by a factor of _k / log(k)_.
-pub fn sum<'a, T: CoordinateType + ::std::iter::Sum>(
+pub fn sum<'a, T: CoordinateType + ::std::iter::Sum + 'a>(
     funcs: &[PiecewiseLinearFunction<T>],
 ) -> Option<PiecewiseLinearFunction<T>> {
     points_of_inflection_iter(funcs).map(|poi| {
-        poi.map(|(x, values)| Coordinate {
-            x,
-            y: values.iter().sum(),
-        })
+        PiecewiseLinearFunction::new(
+            poi.map(|(x, values)| Coordinate {
+                x,
+                y: values.iter().cloned().sum(),
+            })
+            .collect(),
+        )
+        // This unwrap is guaranteed to succeed because the coordinate's x values haven't changed.
+        .unwrap()
     })
 }
 
