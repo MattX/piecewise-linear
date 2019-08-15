@@ -14,14 +14,14 @@ matrix:
 before_deploy:
   - cargo doc --no-deps
   - mkdir target/site-content/
-  - mv target/doc target/site-content/
+  - cp -r target/doc target/site-content/
   - cp README.md target/site-content/index.md
 
 deploy:
   provider: pages
   skip_cleanup: true
-  local_dir: target/doc/
-  github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
+  local_dir: target/site-content/
+  github_token: $GITHUB_TOKEN
   keep_history: true
   on:
     type: push

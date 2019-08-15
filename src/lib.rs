@@ -119,7 +119,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     pub fn segment_at_x(&self, x: T) -> Option<Line<T>> {
         let idx = match self
             .coordinates
-            .binary_search_by(|val| val.x.partial_cmp(&x).unwrap_or(Ordering::Equal))
+            .binary_search_by(|val| bogus_compare(&val.x, &x))
         {
             Ok(idx) => idx,
             Err(idx) => {
@@ -150,7 +150,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     ///
     /// Returns `None` if `to_domain` is not a subset of the domain of `self`.
     pub fn shrink_domain(&self, to_domain: (T, T)) -> Option<PiecewiseLinearFunction<T>> {
-        let order = order_domains(self.domain(), to_domain);
+        let order = compare_domains(self.domain(), to_domain);
         match order {
             Some(Ordering::Equal) => Some(self.clone()),
             Some(Ordering::Greater) => {
@@ -180,7 +180,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         to_domain: (T, T),
         strategy: ExpandDomainStrategy,
     ) -> PiecewiseLinearFunction<T> {
-        if order_domains(self.domain(), to_domain) == Some(Ordering::Equal) {
+        if compare_domains(self.domain(), to_domain) == Some(Ordering::Equal) {
             return self.clone();
         }
         let mut new_points = Vec::new();
@@ -359,7 +359,7 @@ impl<T: CoordinateType> ::std::cmp::PartialOrd for NextSegment<T> {
 
 impl<T: CoordinateType> ::std::cmp::Ord for NextSegment<T> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+        bogus_compare(self, other)
     }
 }
 
@@ -471,7 +471,7 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
 pub fn points_of_inflection_iter<'a, T: CoordinateType + 'a>(
     funcs: &'a [PiecewiseLinearFunction<T>],
 ) -> Option<PointsOfInflectionIterator<'a, T>> {
-    if !funcs.windows(2).all(|w| w[0].has_same_domain_as(&w[1])) {
+    if funcs.is_empty() || !funcs.windows(2).all(|w| w[0].has_same_domain_as(&w[1])) {
         return None;
     }
     Some(PointsOfInflectionIterator {
@@ -500,6 +500,40 @@ pub fn sum<'a, T: CoordinateType + ::std::iter::Sum + 'a>(
     })
 }
 
+pub fn max<'a, T: CoordinateType + ::std::iter::Sum + 'a>(
+    funcs: &[PiecewiseLinearFunction<T>],
+) -> Option<PiecewiseLinearFunction<T>> {
+    let mut prev_max_index = 0;
+    let mut prev_values: Vec<T>;
+    let mut prev_x = funcs.get(0)?.coordinates[0].x;
+    let mut new_values = Vec::new();
+
+    {
+        prev_values = funcs.iter().map(|f| f.coordinates[0].y).collect::<Vec<_>>();
+        let (i, y) = argmax(&prev_values).unwrap();
+        prev_max_index = i;
+        new_values.push(Coordinate { x: prev_x, y: *y });
+    }
+
+    for (x, values) in points_of_inflection_iter(funcs)?.skip(1) {
+        let (i_max, y_max) = argmax(&values).unwrap();
+        if i_max != prev_max_index {
+            let old_segment = Line::new(
+                (prev_x, prev_values[prev_max_index]),
+                (x, values[prev_max_index]),
+            );
+            let new_segment = Line::new((prev_x, prev_values[i_max]), (x, values[i_max]));
+            // Compute intersection (x, y) and add it to new_values
+        }
+        new_values.push(Coordinate { x, y: *y_max });
+        prev_max_index = i_max;
+        prev_values = values;
+        prev_x = x;
+    }
+
+    PiecewiseLinearFunction::new(new_values)
+}
+
 /**** Helpers ****/
 
 /// Returns the restriction of segment `l` to the given domain, or `None` if the line's
@@ -526,7 +560,7 @@ fn y_at_x<T: CoordinateType>(line: &Line<T>, x: T) -> T {
     line.start.y + (x - line.start.x) * line.slope()
 }
 
-fn order_domains<T: CoordinateType>(d1: (T, T), d2: (T, T)) -> Option<Ordering> {
+fn compare_domains<T: CoordinateType>(d1: (T, T), d2: (T, T)) -> Option<Ordering> {
     if d1 == d2 {
         Some(Ordering::Equal)
     } else if d1.0 <= d2.0 && d1.1 >= d2.1 {
@@ -536,6 +570,17 @@ fn order_domains<T: CoordinateType>(d1: (T, T), d2: (T, T)) -> Option<Ordering> 
     } else {
         None
     }
+}
+
+fn bogus_compare<T: PartialOrd>(a: &T, b: &T) -> Ordering {
+    a.partial_cmp(b).unwrap_or(Ordering::Equal)
+}
+
+fn argmax<T: CoordinateType>(values: &[T]) -> Option<(usize, &T)> {
+    values
+        .iter()
+        .enumerate()
+        .max_by(|(i_a, a), (i_b, b)| bogus_compare(a, b))
 }
 
 #[cfg(test)]
