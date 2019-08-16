@@ -12,6 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This crate provides utilities to manipulate continuous
+//! [piecewise linear functions](https://en.wikipedia.org/wiki/Piecewise_linear_function).
+//!
+//! They are internally represented as a list of `(x, y)` pairs, each representing a point of
+//! inflection (or equivalently a limit between two linear pieces). The represented function is
+//! assumed to be linear between each of these points.
+//!
+//! ## Domains
+//!
+//! The domain of a function is the range over which it is defined, that is, the range between
+//! the smallest _x_ coordinate and the greatest one in the function's definition points.
+//!
+//! Most methods will refuse to operate on two (or more) functions that do not have the same
+//! domain. You can use `expand_domain()` and `shrink_domain()` to adapt domains.
+//!
+//! Domains over all real numbers should be possible by using ±inf _x_ values, but this has not
+//! been extensively tested.
+//!
+//! ## Numeric types
+//!
+//! This crate should support functions using any `CoordinateType` (more or less a rust-num `Num`),
+//! however it has not been tested with types other than `f32` and `f64`.
+
 extern crate geo;
 extern crate num_traits;
 
@@ -54,6 +77,7 @@ use num_traits::Signed;
 #[derive(PartialEq, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PiecewiseLinearFunction<T: CoordinateType> {
+    /// Vector of points that make up the function.
     pub coordinates: Vec<Coordinate<T>>,
 }
 
@@ -69,8 +93,9 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
-    /// Returns a new constant `PiecewiseLinearFunction` with the specified domain and value, or
-    /// `None` if the domain is not valid (i.e. `domain.1 <= domain.0`).
+    /// Returns a new constant `PiecewiseLinearFunction` with the specified domain and value.
+    ///
+    /// Returns `None` if the domain is not valid (i.e. `domain.1 <= domain.0`).
     pub fn constant(domain: (T, T), value: T) -> Option<Self> {
         if domain.0 < domain.1 {
             let coordinates = vec![(domain.0, value).into(), (domain.1, value).into()];
@@ -90,14 +115,16 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         self.domain() == other.domain()
     }
 
-    /// Returns an iterator over the segments of f. This iterator is guaranteed to have at least
-    /// one element.
+    /// Returns an iterator over the segments of f.
+    ///
+    /// This iterator is guaranteed to have at least one element.
     pub fn segments_iter(&self) -> SegmentsIterator<T> {
         SegmentsIterator(self.coordinates.iter().peekable())
     }
 
-    /// Returns an iterator over the joint points of inflection of `self` and `other`. See
-    /// `points_of_inflection_iter` in this module for details.
+    /// Returns an iterator over the joint points of inflection of `self` and `other`.
+    ///
+    /// See `points_of_inflection_iter()` in this module for details.
     pub fn points_of_inflection_iter<'a>(
         &'a self,
         other: &'a PiecewiseLinearFunction<T>,
@@ -116,8 +143,9 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
-    /// Returns a segment `((x1, y1), (x2, y2))` of this function such that `x1 <= x <= x2`, or
-    /// `None` if `x` is outside the domain of f.
+    /// Returns a segment `((x1, y1), (x2, y2))` of this function such that `x1 <= x <= x2`.
+    ///
+    /// Returns `None` if `x` is outside the domain of f.
     pub fn segment_at_x(&self, x: T) -> Option<Line<T>> {
         let idx = match self
             .coordinates
@@ -141,8 +169,9 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         }
     }
 
-    /// Computes the value f(x) for this piecewise linear function. Returns `None` if `x` is
-    /// outside the domain of f.
+    /// Computes the value f(x) for this piecewise linear function.
+    ///
+    /// Returns `None` if `x` is outside the domain of f.
     pub fn y_at_x(&self, x: T) -> Option<T> {
         self.segment_at_x(x).map(|line| y_at_x(&line, x))
     }
@@ -175,8 +204,10 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     }
 
     /// Returns a new piecewise linear function that is the expansion of this function to the
-    /// specified domain. At most one value is added on either side. See `ExpandDomainStrategy`
-    /// for options determining how these added values are picked.
+    /// specified domain.
+    ///
+    /// At most one value is added on either side. See `ExpandDomainStrategy` for options
+    /// determining how these added values are picked.
     pub fn expand_domain(
         &self,
         to_domain: (T, T),
@@ -231,10 +262,9 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         new_points.try_into().unwrap()
     }
 
-    /// Sums this method with another piecewise linear function. Both functions must have the same
-    /// domain.
+    /// Sums this method with another piecewise linear function.
     ///
-    /// Returns None if the functions do not have the same domain.
+    /// Both functions must have the same domain; returns `None` otherwise.
     pub fn add(&self, other: &PiecewiseLinearFunction<T>) -> Option<PiecewiseLinearFunction<T>> {
         self.points_of_inflection_iter(other).map(|poi| {
             PiecewiseLinearFunction::new(
@@ -260,7 +290,10 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     /// use std::convert::TryFrom;
     /// let f = PiecewiseLinearFunction::try_from(vec![(0., 1.), (1., 0.)]).unwrap();
     /// let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.)]).unwrap();
-    /// assert_eq!(f.max(&g).unwrap(), PiecewiseLinearFunction::try_from(vec![(0., 1.), (0.5, 0.5), (1., 1.)]).unwrap());
+    /// assert_eq!(
+    ///     f.max(&g).unwrap(),
+    ///     PiecewiseLinearFunction::try_from(vec![(0., 1.), (0.5, 0.5), (1., 1.)]).unwrap()
+    /// );
     /// ```
     ///
     /// Returns `None` if the domains of `self` and `other` are not equal.
@@ -412,8 +445,9 @@ impl<T: CoordinateType> ::std::cmp::Ord for NextSegment<T> {
     }
 }
 
-/// Structure returned by `points_of_inflection_iter()` on `PiecewiseLinearFunction`. See that
-/// function's documentation for details.
+/// Structure returned by `points_of_inflection_iter()` on `PiecewiseLinearFunction`.
+///
+/// See that function's documentation for details.
 pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
     segment_iterators: Vec<::std::iter::Peekable<SegmentsIterator<'a, T>>>,
     heap: BinaryHeap<NextSegment<T>>,
@@ -500,9 +534,9 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
 
 /**** General functions ****/
 
-/// Returns an iterator over triples `(x, y1, y2)`, where `x` is the union of all points of
-/// inflection of `self` and `other`, and `y1` and `y2` are the values of `self` and `other`,
-/// respectively, at the corresponding `x`.
+/// Returns an iterator over pairs `(x, values)`, where `x` is the union of all points of
+/// inflection of `self` and `other`, and `values` is a vector of the values of all passed
+/// functions, in the same order, at the corresponding `x`.
 ///
 /// ```
 /// use std::convert::TryFrom;
