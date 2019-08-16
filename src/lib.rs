@@ -25,7 +25,6 @@ use std::convert::{TryFrom, TryInto};
 
 use geo::{Coordinate, CoordinateType, Line, LineString, Point};
 use num_traits::Signed;
-use std::fmt::Debug;
 
 /// A continuous piecewise linear function.
 ///
@@ -282,7 +281,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
             if i_largest != prev_largest {
                 let (inter_x, inter_y) = line_intersect(
                     &Line::new((prev_x, prev_values[0]), (x, values[0])),
-                    &Line::new((prev_x, prev_values[1]), (x, values[0])),
+                    &Line::new((prev_x, prev_values[1]), (x, values[1])),
                 );
                 new_values.push(Coordinate {
                     x: inter_x,
@@ -294,7 +293,6 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
             prev_x = x;
             prev_values = values;
         }
-        println!("{:?}", new_values);
 
         Some(PiecewiseLinearFunction::new(new_values).unwrap())
     }
@@ -822,16 +820,6 @@ mod tests {
                 &Line::new((-1., 4.), (6., 2.))
             ),
             (4. + 1. / 6., 2. + 11. / 21.)
-        );
-    }
-
-    #[test]
-    fn test_max() {
-        let f = PiecewiseLinearFunction::try_from(vec![(0., 1.), (1., 0.)]).unwrap();
-        let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.)]).unwrap();
-        assert_eq!(
-            f.max(&g).unwrap(),
-            PiecewiseLinearFunction::try_from(vec![(0., 1.), (0.5, 0.5), (1., 1.)]).unwrap()
         );
     }
 }

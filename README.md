@@ -19,9 +19,9 @@ and types.
 - [x] Negation
 - [x] Numerical integration
 - [x] Sum
-- [ ] Min / max
-- [ ] Product
-- [ ] Abs value
+- [x] Max
+
+Pull requests for other features are very welcome!
 
 Most numeric types should be supported, but only `f64` has been
 seriously tested.
