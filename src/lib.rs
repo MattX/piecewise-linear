@@ -25,12 +25,15 @@ use std::convert::{TryFrom, TryInto};
 
 use geo::{Coordinate, CoordinateType, Line, LineString, Point};
 use num_traits::Signed;
+use std::fmt::Debug;
 
 /// A continuous piecewise linear function.
 ///
 /// The function is represented as a list of `(x, y)` pairs, each representing a point of
 /// inflection (or equivalently a limit between two linear pieces). The represented function is
 /// assumed to be linear between each of these points.
+///
+/// ## Invariants
 ///
 /// All methods defined on `PiecewiseLinearFunction` preserve the following invariants:
 ///
@@ -44,8 +47,8 @@ use num_traits::Signed;
 /// discontinuous functions, are not supported.
 ///
 /// ```
-/// use std::convert::TryFrom;
 /// use piecewise_linear::PiecewiseLinearFunction;
+/// use std::convert::TryFrom;
 /// let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
 /// assert_eq!(f.y_at_x(1.25).unwrap(), 1.125);
 /// ```
@@ -246,6 +249,54 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
             // which do not get modified.
             .unwrap()
         })
+    }
+
+    /// Returns a new piecewise linear function that is the maximum of `self` and `other`.
+    ///
+    /// Note that the resulting function may have more points of inflection than either function.
+    /// For instance,
+    ///
+    /// ```
+    /// use piecewise_linear::PiecewiseLinearFunction;
+    /// use std::convert::TryFrom;
+    /// let f = PiecewiseLinearFunction::try_from(vec![(0., 1.), (1., 0.)]).unwrap();
+    /// let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.)]).unwrap();
+    /// assert_eq!(f.max(&g).unwrap(), PiecewiseLinearFunction::try_from(vec![(0., 1.), (0.5, 0.5), (1., 1.)]).unwrap());
+    /// ```
+    ///
+    /// Returns `None` if the domains of `self` and `other` are not equal.
+    pub fn max(&self, other: &PiecewiseLinearFunction<T>) -> Option<PiecewiseLinearFunction<T>> {
+        let mut poi_iter = self.points_of_inflection_iter(other)?;
+        let mut new_values = Vec::new();
+
+        let (x, values) = poi_iter.next().unwrap();
+        let (i_largest, largest) = argmax(&values).unwrap();
+        new_values.push(Coordinate { x, y: *largest });
+
+        let mut prev_largest = i_largest;
+        let mut prev_x = x;
+        let mut prev_values = values;
+
+        for (x, values) in poi_iter {
+            let (i_largest, largest) = argmax(&values).unwrap();
+            if i_largest != prev_largest {
+                let (inter_x, inter_y) = line_intersect(
+                    &Line::new((prev_x, prev_values[0]), (x, values[0])),
+                    &Line::new((prev_x, prev_values[1]), (x, values[0])),
+                );
+                new_values.push(Coordinate {
+                    x: inter_x,
+                    y: inter_y,
+                });
+            }
+            new_values.push(Coordinate { x, y: *largest });
+            prev_largest = i_largest;
+            prev_x = x;
+            prev_values = values;
+        }
+        println!("{:?}", new_values);
+
+        Some(PiecewiseLinearFunction::new(new_values).unwrap())
     }
 }
 
@@ -500,40 +551,6 @@ pub fn sum<'a, T: CoordinateType + ::std::iter::Sum + 'a>(
     })
 }
 
-pub fn max<'a, T: CoordinateType + ::std::iter::Sum + 'a>(
-    funcs: &[PiecewiseLinearFunction<T>],
-) -> Option<PiecewiseLinearFunction<T>> {
-    let mut prev_max_index = 0;
-    let mut prev_values: Vec<T>;
-    let mut prev_x = funcs.get(0)?.coordinates[0].x;
-    let mut new_values = Vec::new();
-
-    {
-        prev_values = funcs.iter().map(|f| f.coordinates[0].y).collect::<Vec<_>>();
-        let (i, y) = argmax(&prev_values).unwrap();
-        prev_max_index = i;
-        new_values.push(Coordinate { x: prev_x, y: *y });
-    }
-
-    for (x, values) in points_of_inflection_iter(funcs)?.skip(1) {
-        let (i_max, y_max) = argmax(&values).unwrap();
-        if i_max != prev_max_index {
-            let old_segment = Line::new(
-                (prev_x, prev_values[prev_max_index]),
-                (x, values[prev_max_index]),
-            );
-            let new_segment = Line::new((prev_x, prev_values[i_max]), (x, values[i_max]));
-            // Compute intersection (x, y) and add it to new_values
-        }
-        new_values.push(Coordinate { x, y: *y_max });
-        prev_max_index = i_max;
-        prev_values = values;
-        prev_x = x;
-    }
-
-    PiecewiseLinearFunction::new(new_values)
-}
-
 /**** Helpers ****/
 
 /// Returns the restriction of segment `l` to the given domain, or `None` if the line's
@@ -560,6 +577,15 @@ fn y_at_x<T: CoordinateType>(line: &Line<T>, x: T) -> T {
     line.start.y + (x - line.start.x) * line.slope()
 }
 
+fn line_intersect<T: CoordinateType>(l1: &Line<T>, l2: &Line<T>) -> (T, T) {
+    let y_intercept_1 = l1.start.y - l1.start.x * l1.slope();
+    let y_intercept_2 = l2.start.y - l2.start.x * l2.slope();
+
+    let x_intersect = (y_intercept_2 - y_intercept_1) / (l1.slope() - l2.slope());
+    let y_intersect = y_at_x(l1, x_intersect);
+    (x_intersect, y_intersect)
+}
+
 fn compare_domains<T: CoordinateType>(d1: (T, T), d2: (T, T)) -> Option<Ordering> {
     if d1 == d2 {
         Some(Ordering::Equal)
@@ -580,7 +606,7 @@ fn argmax<T: CoordinateType>(values: &[T]) -> Option<(usize, &T)> {
     values
         .iter()
         .enumerate()
-        .max_by(|(i_a, a), (i_b, b)| bogus_compare(a, b))
+        .max_by(|(_, a), (_, b)| bogus_compare(a, b))
 }
 
 #[cfg(test)]
@@ -786,5 +812,26 @@ mod tests {
             f.negate(),
             vec![(0., -0.), (1., -1.), (2., -1.5)].try_into().unwrap()
         )
+    }
+
+    #[test]
+    fn test_line_intersect() {
+        assert_eq!(
+            line_intersect(
+                &Line::new((-2., -1.), (5., 3.)),
+                &Line::new((-1., 4.), (6., 2.))
+            ),
+            (4. + 1. / 6., 2. + 11. / 21.)
+        );
+    }
+
+    #[test]
+    fn test_max() {
+        let f = PiecewiseLinearFunction::try_from(vec![(0., 1.), (1., 0.)]).unwrap();
+        let g = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.)]).unwrap();
+        assert_eq!(
+            f.max(&g).unwrap(),
+            PiecewiseLinearFunction::try_from(vec![(0., 1.), (0.5, 0.5), (1., 1.)]).unwrap()
+        );
     }
 }
