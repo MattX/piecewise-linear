@@ -857,6 +857,22 @@
 <span id="857">857</span>
 <span id="858">858</span>
 <span id="859">859</span>
+<span id="860">860</span>
+<span id="861">861</span>
+<span id="862">862</span>
+<span id="863">863</span>
+<span id="864">864</span>
+<span id="865">865</span>
+<span id="866">866</span>
+<span id="867">867</span>
+<span id="868">868</span>
+<span id="869">869</span>
+<span id="870">870</span>
+<span id="871">871</span>
+<span id="872">872</span>
+<span id="873">873</span>
+<span id="874">874</span>
+<span id="875">875</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright 2019 Matthieu Felix</span>
 <span class="comment">//</span>
@@ -906,7 +922,7 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">BinaryHeap</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">convert</span>::{<span class="ident">TryFrom</span>, <span class="ident">TryInto</span>};
 
-<span class="kw">use</span> <span class="ident">geo</span>::{<span class="ident">Coordinate</span>, <span class="ident">CoordinateType</span>, <span class="ident">Line</span>, <span class="ident">LineString</span>, <span class="ident">Point</span>};
+<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">geo</span>::{<span class="ident">Coordinate</span>, <span class="ident">CoordinateType</span>, <span class="ident">Line</span>, <span class="ident">LineString</span>, <span class="ident">Point</span>};
 <span class="kw">use</span> <span class="ident">num_traits</span>::<span class="ident">Signed</span>;
 
 <span class="doccomment">/// A continuous piecewise linear function.</span>
@@ -1046,12 +1062,12 @@
             <span class="prelude-val">Some</span>(<span class="ident">Ordering</span>::<span class="ident">Equal</span>) <span class="op">=&gt;</span> <span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">clone</span>()),
             <span class="prelude-val">Some</span>(<span class="ident">Ordering</span>::<span class="ident">Greater</span>) <span class="op">=&gt;</span> {
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">new_points</span> <span class="op">=</span> <span class="ident">Vec</span>::<span class="ident">new</span>();
-                <span class="kw">if</span> <span class="self">self</span>.<span class="ident">coordinates</span>[<span class="number">0</span>].<span class="ident">x</span> <span class="op">&gt;=</span> <span class="ident">to_domain</span>.<span class="number">0</span> {
-                    <span class="ident">new_points</span>.<span class="ident">push</span>(<span class="self">self</span>.<span class="ident">coordinates</span>[<span class="number">0</span>]);
-                }
                 <span class="kw">for</span> <span class="ident">segment</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">segments_iter</span>() {
                     <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">restricted</span>) <span class="op">=</span> <span class="ident">line_in_domain</span>(<span class="kw-2">&amp;</span><span class="ident">segment</span>, <span class="ident">to_domain</span>) {
-                        <span class="kw">if</span> <span class="ident">segment</span>.<span class="ident">start</span>.<span class="ident">x</span> <span class="op">&lt;</span> <span class="ident">to_domain</span>.<span class="number">0</span> {
+                        <span class="comment">// segment.start.x was segment.end.x at the last iteration; it it&#39;s less</span>
+                        <span class="comment">// than or equal to the domain&#39;s start, the previous segment was totally</span>
+                        <span class="comment">// discarded, but this point should still be added.</span>
+                        <span class="kw">if</span> <span class="ident">segment</span>.<span class="ident">start</span>.<span class="ident">x</span> <span class="op">&lt;=</span> <span class="ident">to_domain</span>.<span class="number">0</span> {
                             <span class="ident">new_points</span>.<span class="ident">push</span>(<span class="ident">restricted</span>.<span class="ident">start</span>);
                         }
                         <span class="ident">new_points</span>.<span class="ident">push</span>(<span class="ident">restricted</span>.<span class="ident">end</span>);
@@ -1176,10 +1192,14 @@
                     <span class="kw-2">&amp;</span><span class="ident">Line</span>::<span class="ident">new</span>((<span class="ident">prev_x</span>, <span class="ident">prev_values</span>[<span class="number">0</span>]), (<span class="ident">x</span>, <span class="ident">values</span>[<span class="number">0</span>])),
                     <span class="kw-2">&amp;</span><span class="ident">Line</span>::<span class="ident">new</span>((<span class="ident">prev_x</span>, <span class="ident">prev_values</span>[<span class="number">1</span>]), (<span class="ident">x</span>, <span class="ident">values</span>[<span class="number">1</span>])),
                 );
-                <span class="ident">new_values</span>.<span class="ident">push</span>(<span class="ident">Coordinate</span> {
-                    <span class="ident">x</span>: <span class="ident">inter_x</span>,
-                    <span class="ident">y</span>: <span class="ident">inter_y</span>,
-                });
+                <span class="comment">// This condition seems necessary as argmax() is likely unstable, so i_largest</span>
+                <span class="comment">// can change even if two lines remain equal.</span>
+                <span class="kw">if</span> <span class="ident">inter_x</span> <span class="op">&gt;</span> <span class="ident">prev_x</span> <span class="op">&amp;&amp;</span> <span class="ident">inter_x</span> <span class="op">&lt;</span> <span class="ident">x</span> {
+                    <span class="ident">new_values</span>.<span class="ident">push</span>(<span class="ident">Coordinate</span> {
+                        <span class="ident">x</span>: <span class="ident">inter_x</span>,
+                        <span class="ident">y</span>: <span class="ident">inter_y</span>,
+                    });
+                }
             }
             <span class="ident">new_values</span>.<span class="ident">push</span>(<span class="ident">Coordinate</span> { <span class="ident">x</span>, <span class="ident">y</span>: <span class="kw-2">*</span><span class="ident">largest</span> });
             <span class="ident">prev_largest</span> <span class="op">=</span> <span class="ident">i_largest</span>;
@@ -1212,6 +1232,18 @@
         )
         <span class="comment">// This unwrap is guaranteed to succeed because the coordinate&#39;s x values haven&#39;t changed.</span>
         .<span class="ident">unwrap</span>()
+    }
+
+    <span class="doccomment">/// Computes the minimum of this function and `other`.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Returns `None` in case of a domain error.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">min</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="ident">PiecewiseLinearFunction</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>) <span class="op">-&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PiecewiseLinearFunction</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;&gt;</span> {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">negate</span>().<span class="ident">max</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="ident">negate</span>())<span class="question-mark">?</span>.<span class="ident">negate</span>())
+    }
+
+    <span class="doccomment">/// Computes the absolute value of this function.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">abs</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-&gt;</span> <span class="ident">PiecewiseLinearFunction</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">max</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">negate</span>()).<span class="ident">unwrap</span>()
     }
 }
 
