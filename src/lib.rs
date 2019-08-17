@@ -46,7 +46,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::convert::{TryFrom, TryInto};
 
-use geo::{Coordinate, CoordinateType, Line, LineString, Point};
+pub use geo::{Coordinate, CoordinateType, Line, LineString, Point};
 use num_traits::Signed;
 
 /// A continuous piecewise linear function.
@@ -186,12 +186,12 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
             Some(Ordering::Equal) => Some(self.clone()),
             Some(Ordering::Greater) => {
                 let mut new_points = Vec::new();
-                if self.coordinates[0].x >= to_domain.0 {
-                    new_points.push(self.coordinates[0]);
-                }
                 for segment in self.segments_iter() {
                     if let Some(restricted) = line_in_domain(&segment, to_domain) {
-                        if segment.start.x < to_domain.0 {
+                        // segment.start.x was segment.end.x at the last iteration; it it's less
+                        // than or equal to the domain's start, the previous segment was totally
+                        // discarded, but this point should still be added.
+                        if segment.start.x <= to_domain.0 {
                             new_points.push(restricted.start);
                         }
                         new_points.push(restricted.end);
@@ -316,10 +316,14 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
                     &Line::new((prev_x, prev_values[0]), (x, values[0])),
                     &Line::new((prev_x, prev_values[1]), (x, values[1])),
                 );
-                new_values.push(Coordinate {
-                    x: inter_x,
-                    y: inter_y,
-                });
+                // This condition seems necessary as argmax() is likely unstable, so i_largest
+                // can change even if two lines remain equal.
+                if inter_x > prev_x && inter_x < x {
+                    new_values.push(Coordinate {
+                        x: inter_x,
+                        y: inter_y,
+                    });
+                }
             }
             new_values.push(Coordinate { x, y: *largest });
             prev_largest = i_largest;
@@ -352,6 +356,18 @@ impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
         )
         // This unwrap is guaranteed to succeed because the coordinate's x values haven't changed.
         .unwrap()
+    }
+
+    /// Computes the minimum of this function and `other`.
+    ///
+    /// Returns `None` in case of a domain error.
+    pub fn min(&self, other: &PiecewiseLinearFunction<T>) -> Option<PiecewiseLinearFunction<T>> {
+        Some(self.negate().max(&other.negate())?.negate())
+    }
+
+    /// Computes the absolute value of this function.
+    pub fn abs(&self) -> PiecewiseLinearFunction<T> {
+        self.max(&self.negate()).unwrap()
     }
 }
 
