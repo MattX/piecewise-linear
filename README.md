@@ -1,12 +1,12 @@
 [![Build Status](https://travis-ci.org/MattX/piecewise-linear.svg?branch=master)](https://travis-ci.org/MattX/piecewise-linear)
 [![Apache 2 licensed](https://img.shields.io/github/license/MattX/piecewise-linear)](LICENSE)
-<!-- [![piecewise-linear on Crates.io](https://meritbadge.herokuapp.com/piecewise-linear)](https://crates.io/crates/piecewise-linear) -->
+[![piecewise-linear on Crates.io](https://img.shields.io/crates/v/piecewise-linear.svg)](https://crates.io/crates/piecewise-linear)
 
 # piecewise-linear
 
-[Documentation](https://mattx.github.io/piecewise-linear/doc/piecewise_linear/)
+[Documentation](https://mattx.github.io/piecewise-linear/doc/piecewise_linear/), [view on GitHub](https://github.com/MattX/piecewise-linear).
 
-[View on GitHub](https://github.com/MattX/piecewise-linear)
+*This crate is beta quality, please [report any issues you encounter](https://github.com/MattX/piecewise-linear/issues).*
 
 ## Piecewise linear function manipulation utilities
 
@@ -22,7 +22,7 @@ It uses [geo](https://github.com/georust/geo) for geometric primitives and types
 
 ```rust
 let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
-assert_eq!(f.y_at_x(1.25).unwrap(), 1.125);
+assert_eq!(f.y_at_x(1.25), Some(1.125));
 ```
 
 ### Features

@@ -8,6 +8,9 @@ readme = "README.md"
 documentation = "https://mattx.github.io/piecewise-linear/doc/piecewise_linear/"
 homepage = "https://mattx.github.io/piecewise-linear/"
 repository = "https://github.com/MattX/piecewise-linear"
+description = "A library for manipulating piecewise linear functions"
+categories = ["data-structure", "science"]
+keywords = ["math"]
 
 [dependencies]
 geo = "0.12.2"
