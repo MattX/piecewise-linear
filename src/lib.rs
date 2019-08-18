@@ -68,11 +68,13 @@ use num_traits::Signed;
 /// This representation means that functions defined on an empty or singleton set, as well as
 /// discontinuous functions, are not supported.
 ///
+/// ## Example
+///
 /// ```
 /// use piecewise_linear::PiecewiseLinearFunction;
 /// use std::convert::TryFrom;
 /// let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();
-/// assert_eq!(f.y_at_x(1.25).unwrap(), 1.125);
+/// assert_eq!(f.y_at_x(1.25), Some(1.125));
 /// ```
 #[derive(PartialEq, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -285,6 +287,8 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     /// Note that the resulting function may have more points of inflection than either function.
     /// For instance,
     ///
+    /// ## Example
+    ///
     /// ```
     /// use piecewise_linear::PiecewiseLinearFunction;
     /// use std::convert::TryFrom;
@@ -461,7 +465,7 @@ impl<T: CoordinateType> ::std::cmp::Ord for NextSegment<T> {
     }
 }
 
-/// Structure returned by `points_of_inflection_iter()` on `PiecewiseLinearFunction`.
+/// Structure returned by `points_of_inflection_iter()`
 ///
 /// See that function's documentation for details.
 pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
@@ -554,6 +558,8 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
 /// inflection of `self` and `other`, and `values` is a vector of the values of all passed
 /// functions, in the same order, at the corresponding `x`.
 ///
+/// ## Example
+///
 /// ```
 /// use std::convert::TryFrom;
 /// use piecewise_linear::{PiecewiseLinearFunction, points_of_inflection_iter};
@@ -564,6 +570,8 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
 ///     vec![(0., vec![0., 0.]), (1., vec![1., 2.]), (1.5, vec![1.25, 3.]), (2., vec![1.5, 10.])]
 /// );
 /// ```
+///
+/// ## Complexity
 ///
 /// The complexity of this method is _O(k log(k) n)_, where _k_ is the number of functions passed,
 /// and _n_ is the number of points in each function.
