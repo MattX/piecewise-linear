@@ -873,6 +873,14 @@
 <span id="873">873</span>
 <span id="874">874</span>
 <span id="875">875</span>
+<span id="876">876</span>
+<span id="877">877</span>
+<span id="878">878</span>
+<span id="879">879</span>
+<span id="880">880</span>
+<span id="881">881</span>
+<span id="882">882</span>
+<span id="883">883</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="comment">// Copyright 2019 Matthieu Felix</span>
 <span class="comment">//</span>
@@ -944,11 +952,13 @@
 <span class="doccomment">/// This representation means that functions defined on an empty or singleton set, as well as</span>
 <span class="doccomment">/// discontinuous functions, are not supported.</span>
 <span class="doccomment">///</span>
+<span class="doccomment">/// ## Example</span>
+<span class="doccomment">///</span>
 <span class="doccomment">/// ```</span>
 <span class="doccomment">/// use piecewise_linear::PiecewiseLinearFunction;</span>
 <span class="doccomment">/// use std::convert::TryFrom;</span>
 <span class="doccomment">/// let f = PiecewiseLinearFunction::try_from(vec![(0., 0.), (1., 1.), (2., 1.5)]).unwrap();</span>
-<span class="doccomment">/// assert_eq!(f.y_at_x(1.25).unwrap(), 1.125);</span>
+<span class="doccomment">/// assert_eq!(f.y_at_x(1.25), Some(1.125));</span>
 <span class="doccomment">/// ```</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">PartialEq</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
 <span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;serde&quot;</span>, <span class="ident">derive</span>(<span class="ident">Serialize</span>, <span class="ident">Deserialize</span>))]</span>
@@ -1161,6 +1171,8 @@
     <span class="doccomment">/// Note that the resulting function may have more points of inflection than either function.</span>
     <span class="doccomment">/// For instance,</span>
     <span class="doccomment">///</span>
+    <span class="doccomment">/// ## Example</span>
+    <span class="doccomment">///</span>
     <span class="doccomment">/// ```</span>
     <span class="doccomment">/// use piecewise_linear::PiecewiseLinearFunction;</span>
     <span class="doccomment">/// use std::convert::TryFrom;</span>
@@ -1337,7 +1349,7 @@
     }
 }
 
-<span class="doccomment">/// Structure returned by `points_of_inflection_iter()` on `PiecewiseLinearFunction`.</span>
+<span class="doccomment">/// Structure returned by `points_of_inflection_iter()`</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// See that function&#39;s documentation for details.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PointsOfInflectionIterator</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span>: <span class="ident">CoordinateType</span> <span class="op">+</span> <span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
@@ -1430,6 +1442,8 @@
 <span class="doccomment">/// inflection of `self` and `other`, and `values` is a vector of the values of all passed</span>
 <span class="doccomment">/// functions, in the same order, at the corresponding `x`.</span>
 <span class="doccomment">///</span>
+<span class="doccomment">/// ## Example</span>
+<span class="doccomment">///</span>
 <span class="doccomment">/// ```</span>
 <span class="doccomment">/// use std::convert::TryFrom;</span>
 <span class="doccomment">/// use piecewise_linear::{PiecewiseLinearFunction, points_of_inflection_iter};</span>
@@ -1440,6 +1454,8 @@
 <span class="doccomment">///     vec![(0., vec![0., 0.]), (1., vec![1., 2.]), (1.5, vec![1.25, 3.]), (2., vec![1.5, 10.])]</span>
 <span class="doccomment">/// );</span>
 <span class="doccomment">/// ```</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// ## Complexity</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// The complexity of this method is _O(k log(k) n)_, where _k_ is the number of functions passed,</span>
 <span class="doccomment">/// and _n_ is the number of points in each function.</span>
