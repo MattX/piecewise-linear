@@ -32,7 +32,7 @@
 //!
 //! ## Numeric types
 //!
-//! This crate should support functions using any `CoordinateType` (more or less a rust-num `Num`),
+//! This crate should support functions using any `CoordFloat` (more or less a rust-num `Num`),
 //! however it has not been tested with types other than `f32` and `f64`.
 
 extern crate geo;
@@ -46,7 +46,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::convert::{TryFrom, TryInto};
 
-pub use geo::{Coordinate, CoordinateType, Line, LineString, Point};
+pub use geo::{Coord, CoordFloat, Line, LineString, Point};
 use num_traits::Signed;
 
 /// A continuous piecewise linear function.
@@ -78,16 +78,16 @@ use num_traits::Signed;
 /// ```
 #[derive(PartialEq, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PiecewiseLinearFunction<T: CoordinateType> {
+pub struct PiecewiseLinearFunction<T: CoordFloat> {
     /// Vector of points that make up the function.
-    pub coordinates: Vec<Coordinate<T>>,
+    pub coordinates: Vec<Coord<T>>,
 }
 
-impl<T: CoordinateType> PiecewiseLinearFunction<T> {
+impl<T: CoordFloat> PiecewiseLinearFunction<T> {
     /// Creates a new `PiecewiseLinearFunction` from a vector of `Coordinates`.
     ///
     /// Returns a new PicewiseLinearFunction, or `None` if the invariants were not respected.
-    pub fn new(coordinates: Vec<Coordinate<T>>) -> Option<Self> {
+    pub fn new(coordinates: Vec<Coord<T>>) -> Option<Self> {
         if coordinates.len() >= 2 && coordinates.windows(2).all(|w| w[0].x < w[1].x) {
             Some(PiecewiseLinearFunction { coordinates })
         } else {
@@ -221,7 +221,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
         let mut new_points = Vec::new();
         if self.coordinates[0].x > to_domain.0 {
             match &strategy {
-                ExpandDomainStrategy::ExtendSegment => new_points.push(Coordinate {
+                ExpandDomainStrategy::ExtendSegment => new_points.push(Coord {
                     x: to_domain.0,
                     y: y_at_x(
                         &Line::new(self.coordinates[0], self.coordinates[1]),
@@ -242,7 +242,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
 
         if self.coordinates[last_index].x < to_domain.1 {
             match &strategy {
-                ExpandDomainStrategy::ExtendSegment => new_points.push(Coordinate {
+                ExpandDomainStrategy::ExtendSegment => new_points.push(Coord {
                     x: to_domain.1,
                     y: y_at_x(
                         &Line::new(
@@ -270,7 +270,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
     pub fn add(&self, other: &PiecewiseLinearFunction<T>) -> Option<PiecewiseLinearFunction<T>> {
         self.points_of_inflection_iter(other).map(|poi| {
             PiecewiseLinearFunction::new(
-                poi.map(|(x, coords)| Coordinate {
+                poi.map(|(x, coords)| Coord {
                     x,
                     y: coords[0] + coords[1],
                 })
@@ -307,7 +307,7 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
 
         let (x, values) = poi_iter.next().unwrap();
         let (i_largest, largest) = argmax(&values).unwrap();
-        new_values.push(Coordinate { x, y: *largest });
+        new_values.push(Coord { x, y: *largest });
 
         let mut prev_largest = i_largest;
         let mut prev_x = x;
@@ -323,13 +323,13 @@ impl<T: CoordinateType> PiecewiseLinearFunction<T> {
                 // This condition seems necessary as argmax() is likely unstable, so i_largest
                 // can change even if two lines remain equal.
                 if inter_x > prev_x && inter_x < x {
-                    new_values.push(Coordinate {
+                    new_values.push(Coord {
                         x: inter_x,
                         y: inter_y,
                     });
                 }
             }
-            new_values.push(Coordinate { x, y: *largest });
+            new_values.push(Coord { x, y: *largest });
             prev_largest = i_largest;
             prev_x = x;
             prev_values = values;
@@ -349,13 +349,13 @@ pub enum ExpandDomainStrategy {
     ExtendValue,
 }
 
-impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
+impl<T: CoordFloat + Signed> PiecewiseLinearFunction<T> {
     /// Returns -f.
     pub fn negate(&self) -> PiecewiseLinearFunction<T> {
         PiecewiseLinearFunction::new(
             self.coordinates
                 .iter()
-                .map(|Coordinate { x, y }| Coordinate { x: *x, y: -(*y) })
+                .map(|Coord { x, y }| Coord { x: *x, y: -(*y) })
                 .collect(),
         )
         // This unwrap is guaranteed to succeed because the coordinate's x values haven't changed.
@@ -375,7 +375,7 @@ impl<T: CoordinateType + Signed> PiecewiseLinearFunction<T> {
     }
 }
 
-impl<T: CoordinateType + Signed> ::std::ops::Neg for PiecewiseLinearFunction<T> {
+impl<T: CoordFloat + Signed> ::std::ops::Neg for PiecewiseLinearFunction<T> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -383,7 +383,7 @@ impl<T: CoordinateType + Signed> ::std::ops::Neg for PiecewiseLinearFunction<T> 
     }
 }
 
-impl<T: CoordinateType + ::std::iter::Sum> PiecewiseLinearFunction<T> {
+impl<T: CoordFloat + ::std::iter::Sum> PiecewiseLinearFunction<T> {
     /// Returns the integral of the considered function over its entire domain.
     pub fn integrate(&self) -> T {
         self.segments_iter()
@@ -402,7 +402,7 @@ impl<T: CoordinateType + ::std::iter::Sum> PiecewiseLinearFunction<T> {
 
 /**** Conversions ****/
 
-impl<T: CoordinateType> TryFrom<LineString<T>> for PiecewiseLinearFunction<T> {
+impl<T: CoordFloat> TryFrom<LineString<T>> for PiecewiseLinearFunction<T> {
     type Error = ();
 
     fn try_from(value: LineString<T>) -> Result<Self, Self::Error> {
@@ -410,15 +410,15 @@ impl<T: CoordinateType> TryFrom<LineString<T>> for PiecewiseLinearFunction<T> {
     }
 }
 
-impl<T: CoordinateType> TryFrom<Vec<Coordinate<T>>> for PiecewiseLinearFunction<T> {
+impl<T: CoordFloat> TryFrom<Vec<Coord<T>>> for PiecewiseLinearFunction<T> {
     type Error = ();
 
-    fn try_from(value: Vec<Coordinate<T>>) -> Result<Self, Self::Error> {
+    fn try_from(value: Vec<Coord<T>>) -> Result<Self, Self::Error> {
         PiecewiseLinearFunction::new(value).ok_or(())
     }
 }
 
-impl<T: CoordinateType> TryFrom<Vec<Point<T>>> for PiecewiseLinearFunction<T> {
+impl<T: CoordFloat> TryFrom<Vec<Point<T>>> for PiecewiseLinearFunction<T> {
     type Error = ();
 
     fn try_from(value: Vec<Point<T>>) -> Result<Self, Self::Error> {
@@ -426,15 +426,15 @@ impl<T: CoordinateType> TryFrom<Vec<Point<T>>> for PiecewiseLinearFunction<T> {
     }
 }
 
-impl<T: CoordinateType> TryFrom<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
+impl<T: CoordFloat> TryFrom<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     type Error = ();
 
     fn try_from(value: Vec<(T, T)>) -> Result<Self, Self::Error> {
-        PiecewiseLinearFunction::new(value.into_iter().map(Coordinate::from).collect()).ok_or(())
+        PiecewiseLinearFunction::new(value.into_iter().map(Coord::from).collect()).ok_or(())
     }
 }
 
-impl<T: CoordinateType> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
+impl<T: CoordFloat> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     fn into(self) -> Vec<(T, T)> {
         self.coordinates
             .into_iter()
@@ -446,20 +446,20 @@ impl<T: CoordinateType> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
 /**** Iterators ****/
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct NextSegment<T: CoordinateType> {
+struct NextSegment<T: CoordFloat> {
     x: T,
     index: usize,
 }
 
-impl<T: CoordinateType> ::std::cmp::Eq for NextSegment<T> {}
+impl<T: CoordFloat> ::std::cmp::Eq for NextSegment<T> {}
 
-impl<T: CoordinateType> ::std::cmp::PartialOrd for NextSegment<T> {
+impl<T: CoordFloat> ::std::cmp::PartialOrd for NextSegment<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.x.partial_cmp(&other.x).map(|r| r.reverse())
     }
 }
 
-impl<T: CoordinateType> ::std::cmp::Ord for NextSegment<T> {
+impl<T: CoordFloat> ::std::cmp::Ord for NextSegment<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         bogus_compare(self, other)
     }
@@ -468,13 +468,13 @@ impl<T: CoordinateType> ::std::cmp::Ord for NextSegment<T> {
 /// Structure returned by `points_of_inflection_iter()`
 ///
 /// See that function's documentation for details.
-pub struct PointsOfInflectionIterator<'a, T: CoordinateType + 'a> {
+pub struct PointsOfInflectionIterator<'a, T: CoordFloat + 'a> {
     segment_iterators: Vec<::std::iter::Peekable<SegmentsIterator<'a, T>>>,
     heap: BinaryHeap<NextSegment<T>>,
     initial: bool,
 }
 
-impl<'a, T: CoordinateType + 'a> PointsOfInflectionIterator<'a, T> {
+impl<'a, T: CoordFloat + 'a> PointsOfInflectionIterator<'a, T> {
     /// Helper method to avoid having rust complain about mutably accessing the segment iterators
     /// and heap at the same time.
     fn initialize(
@@ -498,7 +498,7 @@ impl<'a, T: CoordinateType + 'a> PointsOfInflectionIterator<'a, T> {
     }
 }
 
-impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> {
+impl<'a, T: CoordFloat + 'a> Iterator for PointsOfInflectionIterator<'a, T> {
     type Item = (T, Vec<T>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -538,11 +538,11 @@ impl<'a, T: CoordinateType + 'a> Iterator for PointsOfInflectionIterator<'a, T> 
 }
 
 /// Structure returned by `segments_iter()` on a `PiecewiseLinearFunction`.
-pub struct SegmentsIterator<'a, T: CoordinateType + 'a>(
-    ::std::iter::Peekable<::std::slice::Iter<'a, Coordinate<T>>>,
+pub struct SegmentsIterator<'a, T: CoordFloat + 'a>(
+    ::std::iter::Peekable<::std::slice::Iter<'a, Coord<T>>>,
 );
 
-impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
+impl<'a, T: CoordFloat + 'a> Iterator for SegmentsIterator<'a, T> {
     type Item = Line<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -575,7 +575,7 @@ impl<'a, T: CoordinateType + 'a> Iterator for SegmentsIterator<'a, T> {
 ///
 /// The complexity of this method is _O(k log(k) n)_, where _k_ is the number of functions passed,
 /// and _n_ is the number of points in each function.
-pub fn points_of_inflection_iter<'a, T: CoordinateType + 'a>(
+pub fn points_of_inflection_iter<'a, T: CoordFloat + 'a>(
     funcs: &'a [PiecewiseLinearFunction<T>],
 ) -> Option<PointsOfInflectionIterator<'a, T>> {
     if funcs.is_empty() || !funcs.windows(2).all(|w| w[0].has_same_domain_as(&w[1])) {
@@ -591,12 +591,12 @@ pub fn points_of_inflection_iter<'a, T: CoordinateType + 'a>(
 /// Sums the functions together. Returns `None` in case of domain error.
 ///
 /// This is faster than calling .add() repeatedly by a factor of _k / log(k)_.
-pub fn sum<'a, T: CoordinateType + ::std::iter::Sum + 'a>(
+pub fn sum<'a, T: CoordFloat + ::std::iter::Sum + 'a>(
     funcs: &[PiecewiseLinearFunction<T>],
 ) -> Option<PiecewiseLinearFunction<T>> {
     points_of_inflection_iter(funcs).map(|poi| {
         PiecewiseLinearFunction::new(
-            poi.map(|(x, values)| Coordinate {
+            poi.map(|(x, values)| Coord {
                 x,
                 y: values.iter().cloned().sum(),
             })
@@ -611,7 +611,7 @@ pub fn sum<'a, T: CoordinateType + ::std::iter::Sum + 'a>(
 
 /// Returns the restriction of segment `l` to the given domain, or `None` if the line's
 /// intersection with the domain is either a singleton or empty.
-fn line_in_domain<T: CoordinateType>(l: &Line<T>, domain: (T, T)) -> Option<Line<T>> {
+fn line_in_domain<T: CoordFloat>(l: &Line<T>, domain: (T, T)) -> Option<Line<T>> {
     if l.end.x <= domain.0 || l.start.x >= domain.1 {
         None
     } else {
@@ -629,11 +629,11 @@ fn line_in_domain<T: CoordinateType>(l: &Line<T>, domain: (T, T)) -> Option<Line
     }
 }
 
-fn y_at_x<T: CoordinateType>(line: &Line<T>, x: T) -> T {
+fn y_at_x<T: CoordFloat>(line: &Line<T>, x: T) -> T {
     line.start.y + (x - line.start.x) * line.slope()
 }
 
-fn line_intersect<T: CoordinateType>(l1: &Line<T>, l2: &Line<T>) -> (T, T) {
+fn line_intersect<T: CoordFloat>(l1: &Line<T>, l2: &Line<T>) -> (T, T) {
     let y_intercept_1 = l1.start.y - l1.start.x * l1.slope();
     let y_intercept_2 = l2.start.y - l2.start.x * l2.slope();
 
@@ -642,7 +642,7 @@ fn line_intersect<T: CoordinateType>(l1: &Line<T>, l2: &Line<T>) -> (T, T) {
     (x_intersect, y_intersect)
 }
 
-fn compare_domains<T: CoordinateType>(d1: (T, T), d2: (T, T)) -> Option<Ordering> {
+fn compare_domains<T: CoordFloat>(d1: (T, T), d2: (T, T)) -> Option<Ordering> {
     if d1 == d2 {
         Some(Ordering::Equal)
     } else if d1.0 <= d2.0 && d1.1 >= d2.1 {
@@ -658,7 +658,7 @@ fn bogus_compare<T: PartialOrd>(a: &T, b: &T) -> Ordering {
     a.partial_cmp(b).unwrap_or(Ordering::Equal)
 }
 
-fn argmax<T: CoordinateType>(values: &[T]) -> Option<(usize, &T)> {
+fn argmax<T: CoordFloat>(values: &[T]) -> Option<(usize, &T)> {
     values
         .iter()
         .enumerate()
