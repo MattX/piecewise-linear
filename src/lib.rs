@@ -434,9 +434,9 @@ impl<T: CoordFloat> TryFrom<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
     }
 }
 
-impl<T: CoordFloat> Into<Vec<(T, T)>> for PiecewiseLinearFunction<T> {
-    fn into(self) -> Vec<(T, T)> {
-        self.coordinates
+impl<T: CoordFloat> From<PiecewiseLinearFunction<T>> for Vec<(T, T)> {
+    fn from(val: PiecewiseLinearFunction<T>) -> Self {
+        val.coordinates
             .into_iter()
             .map(|coord| coord.x_y())
             .collect()
@@ -478,7 +478,7 @@ impl<'a, T: CoordFloat + 'a> PointsOfInflectionIterator<'a, T> {
     /// Helper method to avoid having rust complain about mutably accessing the segment iterators
     /// and heap at the same time.
     fn initialize(
-        segment_iterators: &mut Vec<::std::iter::Peekable<SegmentsIterator<'a, T>>>,
+        segment_iterators: &mut [::std::iter::Peekable<SegmentsIterator<'a, T>>],
         heap: &mut BinaryHeap<NextSegment<T>>,
     ) -> (T, Vec<T>) {
         let values = segment_iterators
