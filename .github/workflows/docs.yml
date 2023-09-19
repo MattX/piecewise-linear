@@ -1,0 +1,38 @@
+name: Docs
+run-name: Build and publish docs
+on:
+  push:
+    branches:
+      - master
+jobs:
+  Build-and-Publish-Docs:
+    name: Build and publish docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Run cargo doc
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps
+
+      - name: Copy docs to public
+        run: |
+          mkdir public
+          cp -r target/doc/* public
+          cp README.md public/index.md
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: public
