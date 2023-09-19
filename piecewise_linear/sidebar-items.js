@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExpandDomainStrategy"],"fn":["points_of_inflection_iter","sum"],"struct":["Coordinate","Line","LineString","PiecewiseLinearFunction","Point","PointsOfInflectionIterator","SegmentsIterator"],"trait":["CoordinateType"]};
