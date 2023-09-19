@@ -915,7 +915,7 @@
 //!
 //! ## Numeric types
 //!
-//! This crate should support functions using any `CoordinateType` (more or less a rust-num `Num`),
+//! This crate should support functions using any `CoordFloat` (more or less a rust-num `Num`),
 //! however it has not been tested with types other than `f32` and `f64`.
 
 </span><span class="kw">extern crate </span>geo;
@@ -929,7 +929,7 @@
 <span class="kw">use </span>std::collections::BinaryHeap;
 <span class="kw">use </span>std::convert::{TryFrom, TryInto};
 
-<span class="kw">pub use </span>geo::{Coordinate, CoordinateType, Line, LineString, Point};
+<span class="kw">pub use </span>geo::{Coord, CoordFloat, Line, LineString, Point};
 <span class="kw">use </span>num_traits::Signed;
 
 <span class="doccomment">/// A continuous piecewise linear function.
@@ -961,16 +961,16 @@
 /// ```
 </span><span class="attr">#[derive(PartialEq, Clone, Debug)]
 #[cfg_attr(feature = <span class="string">&quot;serde&quot;</span>, derive(Serialize, Deserialize))]
-</span><span class="kw">pub struct </span>PiecewiseLinearFunction&lt;T: CoordinateType&gt; {
+</span><span class="kw">pub struct </span>PiecewiseLinearFunction&lt;T: CoordFloat&gt; {
     <span class="doccomment">/// Vector of points that make up the function.
-    </span><span class="kw">pub </span>coordinates: Vec&lt;Coordinate&lt;T&gt;&gt;,
+    </span><span class="kw">pub </span>coordinates: Vec&lt;Coord&lt;T&gt;&gt;,
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; PiecewiseLinearFunction&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; PiecewiseLinearFunction&lt;T&gt; {
     <span class="doccomment">/// Creates a new `PiecewiseLinearFunction` from a vector of `Coordinates`.
     ///
     /// Returns a new PicewiseLinearFunction, or `None` if the invariants were not respected.
-    </span><span class="kw">pub fn </span>new(coordinates: Vec&lt;Coordinate&lt;T&gt;&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+    </span><span class="kw">pub fn </span>new(coordinates: Vec&lt;Coord&lt;T&gt;&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">if </span>coordinates.len() &gt;= <span class="number">2 </span>&amp;&amp; coordinates.windows(<span class="number">2</span>).all(|w| w[<span class="number">0</span>].x &lt; w[<span class="number">1</span>].x) {
             <span class="prelude-val">Some</span>(PiecewiseLinearFunction { coordinates })
         } <span class="kw">else </span>{
@@ -1104,7 +1104,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>new_points = Vec::new();
         <span class="kw">if </span><span class="self">self</span>.coordinates[<span class="number">0</span>].x &gt; to_domain.<span class="number">0 </span>{
             <span class="kw">match </span><span class="kw-2">&amp;</span>strategy {
-                ExpandDomainStrategy::ExtendSegment =&gt; new_points.push(Coordinate {
+                ExpandDomainStrategy::ExtendSegment =&gt; new_points.push(Coord {
                     x: to_domain.<span class="number">0</span>,
                     y: y_at_x(
                         <span class="kw-2">&amp;</span>Line::new(<span class="self">self</span>.coordinates[<span class="number">0</span>], <span class="self">self</span>.coordinates[<span class="number">1</span>]),
@@ -1125,7 +1125,7 @@
 
         <span class="kw">if </span><span class="self">self</span>.coordinates[last_index].x &lt; to_domain.<span class="number">1 </span>{
             <span class="kw">match </span><span class="kw-2">&amp;</span>strategy {
-                ExpandDomainStrategy::ExtendSegment =&gt; new_points.push(Coordinate {
+                ExpandDomainStrategy::ExtendSegment =&gt; new_points.push(Coord {
                     x: to_domain.<span class="number">1</span>,
                     y: y_at_x(
                         <span class="kw-2">&amp;</span>Line::new(
@@ -1153,7 +1153,7 @@
     </span><span class="kw">pub fn </span>add(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>PiecewiseLinearFunction&lt;T&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;PiecewiseLinearFunction&lt;T&gt;&gt; {
         <span class="self">self</span>.points_of_inflection_iter(other).map(|poi| {
             PiecewiseLinearFunction::new(
-                poi.map(|(x, coords)| Coordinate {
+                poi.map(|(x, coords)| Coord {
                     x,
                     y: coords[<span class="number">0</span>] + coords[<span class="number">1</span>],
                 })
@@ -1190,7 +1190,7 @@
 
         <span class="kw">let </span>(x, values) = poi_iter.next().unwrap();
         <span class="kw">let </span>(i_largest, largest) = argmax(<span class="kw-2">&amp;</span>values).unwrap();
-        new_values.push(Coordinate { x, y: <span class="kw-2">*</span>largest });
+        new_values.push(Coord { x, y: <span class="kw-2">*</span>largest });
 
         <span class="kw">let </span><span class="kw-2">mut </span>prev_largest = i_largest;
         <span class="kw">let </span><span class="kw-2">mut </span>prev_x = x;
@@ -1206,13 +1206,13 @@
                 <span class="comment">// This condition seems necessary as argmax() is likely unstable, so i_largest
                 // can change even if two lines remain equal.
                 </span><span class="kw">if </span>inter_x &gt; prev_x &amp;&amp; inter_x &lt; x {
-                    new_values.push(Coordinate {
+                    new_values.push(Coord {
                         x: inter_x,
                         y: inter_y,
                     });
                 }
             }
-            new_values.push(Coordinate { x, y: <span class="kw-2">*</span>largest });
+            new_values.push(Coord { x, y: <span class="kw-2">*</span>largest });
             prev_largest = i_largest;
             prev_x = x;
             prev_values = values;
@@ -1232,13 +1232,13 @@
     </span>ExtendValue,
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType + Signed&gt; PiecewiseLinearFunction&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat + Signed&gt; PiecewiseLinearFunction&lt;T&gt; {
     <span class="doccomment">/// Returns -f.
     </span><span class="kw">pub fn </span>negate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PiecewiseLinearFunction&lt;T&gt; {
         PiecewiseLinearFunction::new(
             <span class="self">self</span>.coordinates
                 .iter()
-                .map(|Coordinate { x, y }| Coordinate { x: <span class="kw-2">*</span>x, y: -(<span class="kw-2">*</span>y) })
+                .map(|Coord { x, y }| Coord { x: <span class="kw-2">*</span>x, y: -(<span class="kw-2">*</span>y) })
                 .collect(),
         )
         <span class="comment">// This unwrap is guaranteed to succeed because the coordinate&#39;s x values haven&#39;t changed.
@@ -1258,7 +1258,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType + Signed&gt; ::std::ops::Neg <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat + Signed&gt; ::std::ops::Neg <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
     <span class="kw">type </span>Output = <span class="self">Self</span>;
 
     <span class="kw">fn </span>neg(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Output {
@@ -1266,7 +1266,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType + ::std::iter::Sum&gt; PiecewiseLinearFunction&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat + ::std::iter::Sum&gt; PiecewiseLinearFunction&lt;T&gt; {
     <span class="doccomment">/// Returns the integral of the considered function over its entire domain.
     </span><span class="kw">pub fn </span>integrate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; T {
         <span class="self">self</span>.segments_iter()
@@ -1285,7 +1285,7 @@
 
 <span class="comment">/**** Conversions ****/
 
-</span><span class="kw">impl</span>&lt;T: CoordinateType&gt; TryFrom&lt;LineString&lt;T&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
+</span><span class="kw">impl</span>&lt;T: CoordFloat&gt; TryFrom&lt;LineString&lt;T&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
     <span class="kw">type </span>Error = ();
 
     <span class="kw">fn </span>try_from(value: LineString&lt;T&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
@@ -1293,15 +1293,15 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; TryFrom&lt;Vec&lt;Coordinate&lt;T&gt;&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; TryFrom&lt;Vec&lt;Coord&lt;T&gt;&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
     <span class="kw">type </span>Error = ();
 
-    <span class="kw">fn </span>try_from(value: Vec&lt;Coordinate&lt;T&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+    <span class="kw">fn </span>try_from(value: Vec&lt;Coord&lt;T&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
         PiecewiseLinearFunction::new(value).ok_or(())
     }
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; TryFrom&lt;Vec&lt;Point&lt;T&gt;&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; TryFrom&lt;Vec&lt;Point&lt;T&gt;&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
     <span class="kw">type </span>Error = ();
 
     <span class="kw">fn </span>try_from(value: Vec&lt;Point&lt;T&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
@@ -1309,17 +1309,17 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; TryFrom&lt;Vec&lt;(T, T)&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; TryFrom&lt;Vec&lt;(T, T)&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
     <span class="kw">type </span>Error = ();
 
     <span class="kw">fn </span>try_from(value: Vec&lt;(T, T)&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-        PiecewiseLinearFunction::new(value.into_iter().map(Coordinate::from).collect()).ok_or(())
+        PiecewiseLinearFunction::new(value.into_iter().map(Coord::from).collect()).ok_or(())
     }
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; Into&lt;Vec&lt;(T, T)&gt;&gt; <span class="kw">for </span>PiecewiseLinearFunction&lt;T&gt; {
-    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; Vec&lt;(T, T)&gt; {
-        <span class="self">self</span>.coordinates
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; From&lt;PiecewiseLinearFunction&lt;T&gt;&gt; <span class="kw">for </span>Vec&lt;(T, T)&gt; {
+    <span class="kw">fn </span>from(val: PiecewiseLinearFunction&lt;T&gt;) -&gt; <span class="self">Self </span>{
+        val.coordinates
             .into_iter()
             .map(|coord| coord.x_y())
             .collect()
@@ -1329,20 +1329,20 @@
 <span class="comment">/**** Iterators ****/
 
 </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq)]
-</span><span class="kw">struct </span>NextSegment&lt;T: CoordinateType&gt; {
+</span><span class="kw">struct </span>NextSegment&lt;T: CoordFloat&gt; {
     x: T,
     index: usize,
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; ::std::cmp::Eq <span class="kw">for </span>NextSegment&lt;T&gt; {}
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; ::std::cmp::Eq <span class="kw">for </span>NextSegment&lt;T&gt; {}
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; ::std::cmp::PartialOrd <span class="kw">for </span>NextSegment&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; ::std::cmp::PartialOrd <span class="kw">for </span>NextSegment&lt;T&gt; {
     <span class="kw">fn </span>partial_cmp(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
         <span class="self">self</span>.x.partial_cmp(<span class="kw-2">&amp;</span>other.x).map(|r| r.reverse())
     }
 }
 
-<span class="kw">impl</span>&lt;T: CoordinateType&gt; ::std::cmp::Ord <span class="kw">for </span>NextSegment&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: CoordFloat&gt; ::std::cmp::Ord <span class="kw">for </span>NextSegment&lt;T&gt; {
     <span class="kw">fn </span>cmp(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; Ordering {
         bogus_compare(<span class="self">self</span>, other)
     }
@@ -1351,17 +1351,17 @@
 <span class="doccomment">/// Structure returned by `points_of_inflection_iter()`
 ///
 /// See that function&#39;s documentation for details.
-</span><span class="kw">pub struct </span>PointsOfInflectionIterator&lt;<span class="lifetime">&#39;a</span>, T: CoordinateType + <span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">pub struct </span>PointsOfInflectionIterator&lt;<span class="lifetime">&#39;a</span>, T: CoordFloat + <span class="lifetime">&#39;a</span>&gt; {
     segment_iterators: Vec&lt;::std::iter::Peekable&lt;SegmentsIterator&lt;<span class="lifetime">&#39;a</span>, T&gt;&gt;&gt;,
     heap: BinaryHeap&lt;NextSegment&lt;T&gt;&gt;,
     initial: bool,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: CoordinateType + <span class="lifetime">&#39;a</span>&gt; PointsOfInflectionIterator&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: CoordFloat + <span class="lifetime">&#39;a</span>&gt; PointsOfInflectionIterator&lt;<span class="lifetime">&#39;a</span>, T&gt; {
     <span class="doccomment">/// Helper method to avoid having rust complain about mutably accessing the segment iterators
     /// and heap at the same time.
     </span><span class="kw">fn </span>initialize(
-        segment_iterators: <span class="kw-2">&amp;mut </span>Vec&lt;::std::iter::Peekable&lt;SegmentsIterator&lt;<span class="lifetime">&#39;a</span>, T&gt;&gt;&gt;,
+        segment_iterators: <span class="kw-2">&amp;mut </span>[::std::iter::Peekable&lt;SegmentsIterator&lt;<span class="lifetime">&#39;a</span>, T&gt;&gt;],
         heap: <span class="kw-2">&amp;mut </span>BinaryHeap&lt;NextSegment&lt;T&gt;&gt;,
     ) -&gt; (T, Vec&lt;T&gt;) {
         <span class="kw">let </span>values = segment_iterators
@@ -1381,7 +1381,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: CoordinateType + <span class="lifetime">&#39;a</span>&gt; Iterator <span class="kw">for </span>PointsOfInflectionIterator&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: CoordFloat + <span class="lifetime">&#39;a</span>&gt; Iterator <span class="kw">for </span>PointsOfInflectionIterator&lt;<span class="lifetime">&#39;a</span>, T&gt; {
     <span class="kw">type </span>Item = (T, Vec&lt;T&gt;);
 
     <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
@@ -1421,11 +1421,11 @@
 }
 
 <span class="doccomment">/// Structure returned by `segments_iter()` on a `PiecewiseLinearFunction`.
-</span><span class="kw">pub struct </span>SegmentsIterator&lt;<span class="lifetime">&#39;a</span>, T: CoordinateType + <span class="lifetime">&#39;a</span>&gt;(
-    ::std::iter::Peekable&lt;::std::slice::Iter&lt;<span class="lifetime">&#39;a</span>, Coordinate&lt;T&gt;&gt;&gt;,
+</span><span class="kw">pub struct </span>SegmentsIterator&lt;<span class="lifetime">&#39;a</span>, T: CoordFloat + <span class="lifetime">&#39;a</span>&gt;(
+    ::std::iter::Peekable&lt;::std::slice::Iter&lt;<span class="lifetime">&#39;a</span>, Coord&lt;T&gt;&gt;&gt;,
 );
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: CoordinateType + <span class="lifetime">&#39;a</span>&gt; Iterator <span class="kw">for </span>SegmentsIterator&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: CoordFloat + <span class="lifetime">&#39;a</span>&gt; Iterator <span class="kw">for </span>SegmentsIterator&lt;<span class="lifetime">&#39;a</span>, T&gt; {
     <span class="kw">type </span>Item = Line&lt;T&gt;;
 
     <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
@@ -1458,7 +1458,7 @@
 ///
 /// The complexity of this method is _O(k log(k) n)_, where _k_ is the number of functions passed,
 /// and _n_ is the number of points in each function.
-</span><span class="kw">pub fn </span>points_of_inflection_iter&lt;<span class="lifetime">&#39;a</span>, T: CoordinateType + <span class="lifetime">&#39;a</span>&gt;(
+</span><span class="kw">pub fn </span>points_of_inflection_iter&lt;<span class="lifetime">&#39;a</span>, T: CoordFloat + <span class="lifetime">&#39;a</span>&gt;(
     funcs: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>[PiecewiseLinearFunction&lt;T&gt;],
 ) -&gt; <span class="prelude-ty">Option</span>&lt;PointsOfInflectionIterator&lt;<span class="lifetime">&#39;a</span>, T&gt;&gt; {
     <span class="kw">if </span>funcs.is_empty() || !funcs.windows(<span class="number">2</span>).all(|w| w[<span class="number">0</span>].has_same_domain_as(<span class="kw-2">&amp;</span>w[<span class="number">1</span>])) {
@@ -1474,12 +1474,12 @@
 <span class="doccomment">/// Sums the functions together. Returns `None` in case of domain error.
 ///
 /// This is faster than calling .add() repeatedly by a factor of _k / log(k)_.
-</span><span class="kw">pub fn </span>sum&lt;<span class="lifetime">&#39;a</span>, T: CoordinateType + ::std::iter::Sum + <span class="lifetime">&#39;a</span>&gt;(
+</span><span class="kw">pub fn </span>sum&lt;<span class="lifetime">&#39;a</span>, T: CoordFloat + ::std::iter::Sum + <span class="lifetime">&#39;a</span>&gt;(
     funcs: <span class="kw-2">&amp;</span>[PiecewiseLinearFunction&lt;T&gt;],
 ) -&gt; <span class="prelude-ty">Option</span>&lt;PiecewiseLinearFunction&lt;T&gt;&gt; {
     points_of_inflection_iter(funcs).map(|poi| {
         PiecewiseLinearFunction::new(
-            poi.map(|(x, values)| Coordinate {
+            poi.map(|(x, values)| Coord {
                 x,
                 y: values.iter().cloned().sum(),
             })
@@ -1494,7 +1494,7 @@
 
 </span><span class="doccomment">/// Returns the restriction of segment `l` to the given domain, or `None` if the line&#39;s
 /// intersection with the domain is either a singleton or empty.
-</span><span class="kw">fn </span>line_in_domain&lt;T: CoordinateType&gt;(l: <span class="kw-2">&amp;</span>Line&lt;T&gt;, domain: (T, T)) -&gt; <span class="prelude-ty">Option</span>&lt;Line&lt;T&gt;&gt; {
+</span><span class="kw">fn </span>line_in_domain&lt;T: CoordFloat&gt;(l: <span class="kw-2">&amp;</span>Line&lt;T&gt;, domain: (T, T)) -&gt; <span class="prelude-ty">Option</span>&lt;Line&lt;T&gt;&gt; {
     <span class="kw">if </span>l.end.x &lt;= domain.<span class="number">0 </span>|| l.start.x &gt;= domain.<span class="number">1 </span>{
         <span class="prelude-val">None
     </span>} <span class="kw">else </span>{
@@ -1512,11 +1512,11 @@
     }
 }
 
-<span class="kw">fn </span>y_at_x&lt;T: CoordinateType&gt;(line: <span class="kw-2">&amp;</span>Line&lt;T&gt;, x: T) -&gt; T {
+<span class="kw">fn </span>y_at_x&lt;T: CoordFloat&gt;(line: <span class="kw-2">&amp;</span>Line&lt;T&gt;, x: T) -&gt; T {
     line.start.y + (x - line.start.x) * line.slope()
 }
 
-<span class="kw">fn </span>line_intersect&lt;T: CoordinateType&gt;(l1: <span class="kw-2">&amp;</span>Line&lt;T&gt;, l2: <span class="kw-2">&amp;</span>Line&lt;T&gt;) -&gt; (T, T) {
+<span class="kw">fn </span>line_intersect&lt;T: CoordFloat&gt;(l1: <span class="kw-2">&amp;</span>Line&lt;T&gt;, l2: <span class="kw-2">&amp;</span>Line&lt;T&gt;) -&gt; (T, T) {
     <span class="kw">let </span>y_intercept_1 = l1.start.y - l1.start.x * l1.slope();
     <span class="kw">let </span>y_intercept_2 = l2.start.y - l2.start.x * l2.slope();
 
@@ -1525,7 +1525,7 @@
     (x_intersect, y_intersect)
 }
 
-<span class="kw">fn </span>compare_domains&lt;T: CoordinateType&gt;(d1: (T, T), d2: (T, T)) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
+<span class="kw">fn </span>compare_domains&lt;T: CoordFloat&gt;(d1: (T, T), d2: (T, T)) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
     <span class="kw">if </span>d1 == d2 {
         <span class="prelude-val">Some</span>(Ordering::Equal)
     } <span class="kw">else if </span>d1.<span class="number">0 </span>&lt;= d2.<span class="number">0 </span>&amp;&amp; d1.<span class="number">1 </span>&gt;= d2.<span class="number">1 </span>{
@@ -1541,7 +1541,7 @@
     a.partial_cmp(b).unwrap_or(Ordering::Equal)
 }
 
-<span class="kw">fn </span>argmax&lt;T: CoordinateType&gt;(values: <span class="kw-2">&amp;</span>[T]) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, <span class="kw-2">&amp;</span>T)&gt; {
+<span class="kw">fn </span>argmax&lt;T: CoordFloat&gt;(values: <span class="kw-2">&amp;</span>[T]) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, <span class="kw-2">&amp;</span>T)&gt; {
     values
         .iter()
         .enumerate()
